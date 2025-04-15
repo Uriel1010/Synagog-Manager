@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_submit %} {# Import if using DeleteForm macro #}
+
+{% block title %}Events{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Events</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('main.create_event') }}" class="btn btn-sm btn-outline-secondary">
+                Create New Event
+            </a>
+        </div>
+    </div>
+
+    {% if events.items %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th scope="col">Event Name</th>
+                    <th scope="col">Date (Gregorian)</th>
+                    <th scope="col">Hebrew Date</th>
+                    <th scope="col">Details</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events.items %}
+                <tr>
+                    <td>{{ event.event_name }}</td>
+                    <td>{{ event.gregorian_date.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ event.hebrew_date }}</td>
+                    <td>{{ event.details or 'N/A' }}</td>
+                    <td>
+                        <a href="{{ url_for('scanning.start_scanning', event_id=event.id) }}" class="btn btn-sm btn-success me-1 mb-1" title="Start Scanning">Scan</a>
+                        <a href="{{ url_for('reports.view_report', event_id=event.id) }}" class="btn btn-sm btn-info me-1 mb-1" title="View Report">Report</a>
+                        <a href="{{ url_for('main.edit_event', event_id=event.id) }}" class="btn btn-sm btn-warning me-1 mb-1" title="Edit">Edit</a>
+                        {# Delete Form #}
+                        <form action="{{ url_for('main.delete_event', event_id=event.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this event and ALL its purchases? This cannot be undone.');">
+                            {{ delete_form.hidden_tag() }} {# CSRF token #}
+                            {{ render_submit(delete_form.submit, class="btn btn-sm btn-danger mb-1") }} {# Use class here #}
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {# ... (Pagination code remains the same) ... #}
+     <nav aria-label="Event navigation">
+        <ul class="pagination justify-content-center">
+            <li class="page-item {% if not events.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('main.list_events', page=events.prev_num) if events.has_prev else '#' }}">Previous</a>
+            </li>
+            {% for page_num in events.iter_pages() %}
+                {% if page_num %}
+                    <li class="page-item {% if page_num == events.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('main.list_events', page=page_num) }}">{{ page_num }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not events.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('main.list_events', page=events.next_num) if events.has_next else '#' }}">Next</a>
+            </li>
+        </ul>
+    </nav>
+
+
+    {% else %}
+    <p>No events found. <a href="{{ url_for('main.create_event') }}">Create the first one?</a></p>
+    {% endif %}
+
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_field, render_submit %}
+
+{% block title %}Select Report{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2>Generate Event Report</h2>
+        <p>Select an event below to generate a PDF summary of all purchases made during that event.</p>
+        <form method="POST" action="{{ url_for('reports.select_report') }}" novalidate>
+             {{ form.hidden_tag() }}
+             {% if form.event_id.choices %}
+                {{ render_field(form.event_id) }}
+                <div class="mt-3 d-grid">
+                    {{ render_submit(form.submit, value='Generate Report') }}
+                </div>
+             {% else %}
+                 <div class="alert alert-warning">No events found. Please create an event first.</div>
+                 <a href="{{ url_for('main.create_event') }}" class="btn btn-primary">Create Event</a>
+             {% endif %}
+
+        </form>
+    </div>
+</div>
+{% endblock %}

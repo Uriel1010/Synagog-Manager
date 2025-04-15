@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_submit %}
+
+{% block title %}Manage Items{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Manage Items (Aliyot, Sponsorships, etc.)</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('admin.create_item') }}" class="btn btn-sm btn-outline-secondary">
+                Add New Item
+            </a>
+        </div>
+    </div>
+
+    {% if items %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Barcode ID</th>
+                    <th scope="col">Unique?</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.barcode_id }}</td>
+                    <td>{% if item.is_unique %}<span class="badge bg-warning text-dark">Yes</span>{% else %}No{% endif %}</td>
+                    <td>
+                         <a href="{{ url_for('admin.edit_item', item_id=item.id) }}" class="btn btn-sm btn-warning me-1 mb-1" title="Edit">Edit</a>
+                         {# Delete Form - Only show if no purchases exist #}
+                         {% if not item.purchases.first() %}
+                         <form action="{{ url_for('admin.delete_item', item_id=item.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this item?');">
+                            {{ delete_form.hidden_tag() }} {# CSRF token #}
+                            {{ render_submit(delete_form.submit, class="btn btn-sm btn-danger mb-1") }}
+                         </form>
+                         {% else %}
+                          <button class="btn btn-sm btn-danger mb-1" disabled title="Cannot delete: Item has purchases">Delete</button>
+                         {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No items found. <a href="{{ url_for('admin.create_item') }}">Add the first one?</a></p>
+    {% endif %}
+
+{% endblock %}

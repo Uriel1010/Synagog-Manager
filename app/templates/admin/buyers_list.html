@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_submit %}
+
+{% block title %}Manage Buyers{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Manage Buyers</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('admin.create_buyer') }}" class="btn btn-sm btn-outline-secondary">
+                Add New Buyer
+            </a>
+        </div>
+    </div>
+
+    {% if buyers %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Barcode ID</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for buyer in buyers %}
+                <tr>
+                    <td>{{ buyer.name }}</td>
+                    <td>{{ buyer.barcode_id }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.edit_buyer', buyer_id=buyer.id) }}" class="btn btn-sm btn-warning me-1 mb-1" title="Edit">Edit</a>
+                        {# Delete Form - Only show if no purchases exist #}
+                        {% if not buyer.purchases.first() %}
+                        <form action="{{ url_for('admin.delete_buyer', buyer_id=buyer.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this buyer?');">
+                            {{ delete_form.hidden_tag() }} {# CSRF token #}
+                            {{ render_submit(delete_form.submit, class="btn btn-sm btn-danger mb-1") }}
+                        </form>
+                        {% else %}
+                         <button class="btn btn-sm btn-danger mb-1" disabled title="Cannot delete: Buyer has purchases">Delete</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No buyers found. <a href="{{ url_for('admin.create_buyer') }}">Add the first one?</a></p>
+    {% endif %}
+
+{% endblock %}

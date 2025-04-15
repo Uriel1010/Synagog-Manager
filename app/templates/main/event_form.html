@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_field, render_submit %} <!-- Optional helper -->
+
+{% block title %}{{ legend }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2>{{ legend }}</h2>
+        <form method="POST" action="" novalidate> <!-- Action URL set by route -->
+            {{ form.hidden_tag() }}
+            {{ render_field(form.event_name) }}
+            {{ render_field(form.gregorian_date, placeholder='YYYY-MM-DD (Defaults to today if blank)') }}
+            {{ render_field(form.details) }}
+            <div class="mt-3">
+                {{ render_submit(form.submit) }}
+                 <a href="{{ url_for('main.list_events') }}" class="btn btn-secondary ms-2">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

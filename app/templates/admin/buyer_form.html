@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_field, render_submit %}
+
+{% block title %}{{ legend }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2>{{ legend }}</h2>
+         <p class="text-muted">Ensure the Barcode ID is unique and matches the physical barcode card.</p>
+        <form method="POST" action="" novalidate>
+            {{ form.hidden_tag() }} {# Includes CSRF and the hidden original_barcode_id field #}
+            {{ render_field(form.name) }}
+            {{ render_field(form.barcode_id) }}
+             {# Display validation errors directly below the field via the macro #}
+             {# Removed explicit error display here as macro handles it #}
+            <div class="mt-3">
+                {{ render_submit(form.submit) }}
+                <a href="{{ url_for('admin.list_buyers') }}" class="btn btn-secondary ms-2">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

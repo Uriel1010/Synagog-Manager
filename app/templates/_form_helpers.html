@@ -1,0 +1,57 @@
+{# file: app/templates/_form_helpers.html (Corrected) #}
+{% macro render_field(field, placeholder='') %}
+  <div class="mb-3">
+    {{ field.label(class="form-label") }}
+    {% if placeholder %}
+      {{ field(placeholder=placeholder, class="form-control" + (" is-invalid" if field.errors else "")) }}
+    {% else %}
+      {{ field(class="form-control" + (" is-invalid" if field.errors else "")) }}
+    {% endif %}
+    {% if field.errors %}
+      <div class="invalid-feedback">
+        {% for error in field.errors %}
+          <span>{{ error }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if field.description %}
+      <div class="form-text">{{ field.description }}</div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+
+{% macro render_checkbox(field, description=None) %}
+  <div class="mb-3 form-check">
+    {{ field(class="form-check-input" + (" is-invalid" if field.errors else "")) }}
+    {{ field.label(class="form-check-label") }}
+    {% if field.errors %}
+      <div class="invalid-feedback d-block">
+        {% for error in field.errors %}
+          <span>{{ error }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {# Render the provided override or fallback to the field’s own description #}
+    {% if description_override %}
+      <div class="form-text">{{ description_override }}</div>
+    {% elif field.description %}
+      <div class="form-text">{{ field.description }}</div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+
+
+{% macro render_submit(field) %}
+    {# But we pass 'kwargs' when CALLING the field itself #}
+    {# 'kwargs' here refers to the arguments passed when calling the macro, like class="btn..." #}
+    {{ field(**kwargs) }}
+{% endmacro %}
+
+{# --- Update for Delete Button --- #}
+{# You were already correctly setting the class via render_kw in forms.py. #}
+{# However, to make the macro more flexible if you wanted to override classes #}
+{# or add others, you could pass specific args, but the original render_submit was fine. #}
+{# The error was the **kwargs in the signature. #}
+{# This simplified version relies entirely on attributes set in the Python form definition. #}

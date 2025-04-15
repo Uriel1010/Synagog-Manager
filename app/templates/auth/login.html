@@ -1,0 +1,22 @@
+{# file: app/templates/auth/login.html (using macro) #}
+{% extends "base.html" %}
+{% from "_form_helpers.html" import render_field, render_checkbox, render_submit %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2>Login</h2>
+        <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
+            {{ form.hidden_tag() }}
+            {{ render_field(form.username) }}
+            {{ render_field(form.password) }}
+            {{ render_checkbox(form.remember_me) }}
+            <div class="d-grid">
+                {{ render_submit(form.submit) }}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

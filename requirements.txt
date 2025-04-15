@@ -1,0 +1,19 @@
+# requirements.txt (Updated)
+Flask>=2.2.0 # Core framework
+SQLAlchemy>=1.4.0 # ORM
+Flask-SQLAlchemy>=3.0.0 # Flask integration for SQLAlchemy
+Flask-Migrate>=4.0.0 # For database schema migrations (Alembic wrapper)
+Flask-WTF>=1.0.0 # Forms handling and CSRF protection
+email_validator # Required by Flask-WTF for email validation (if needed)
+python-dotenv>=0.20.0 # To load environment variables from .env file
+reportlab>=3.6.0 # PDF Generation
+python-barcode>=0.14.0 # Barcode Generation
+Pillow>=9.0.0 # Required by python-barcode ImageWriter
+hdate # Hebrew Date library
+Flask-Login>=0.6.0 # User session management
+bcrypt>=4.0.0 # Password hashing library
+Flask-Bcrypt>=1.0.0 # Flask integration for bcrypt
+tzdata # <-- ADD THIS for timezone database on Windows/etc.
+gunicorn # WSGI server for deployment (optional but recommended)
+python-bidi
+arabic-reshaper

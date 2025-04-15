@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel{% endblock %}
+
+{% block content %}
+    <div class="pb-3 mb-4 border-bottom">
+      <h1 class="h2">Admin Panel</h1>
+    </div>
+
+    <p>Use the links below or the navigation bar to manage application data.</p>
+
+    <div class="list-group">
+        <a href="{{ url_for('admin.list_buyers') }}" class="list-group-item list-group-item-action">
+            Manage Buyers
+        </a>
+        <a href="{{ url_for('admin.list_items') }}" class="list-group-item list-group-item-action">
+            Manage Items (Aliyot, Sponsorships, etc.)
+        </a>
+        <a href="{{ url_for('admin.print_cards') }}" class="list-group-item list-group-item-action">
+            Print Barcode Cards (Buyers, Items, Prices)
+        </a>
+        <!-- Add links to other admin functions like User Management here -->
+        <!-- <a href="#" class="list-group-item list-group-item-action disabled">Manage Users (Not Implemented)</a> -->
+    </div>
+
+{% endblock %}
