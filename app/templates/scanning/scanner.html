@@ -3,25 +3,50 @@
 
 {% block title %}Scanning: {{ event.event_name }}{% endblock %}
 
+{# --- Add some mobile-specific styles --- #}
+{% block head_extra %}
+<style>
+  /* Ensure video doesn't overflow its container */
+  #camera {
+    max-width: 100%;
+    height: auto; /* Adjust height automatically */
+    max-height: 40vh; /* Limit height on mobile */
+  }
+  /* Slightly larger tap targets for +/- buttons on mobile */
+  @media (max-width: 576px) {
+    .input-group-sm .btn {
+      padding: .25rem .6rem; /* Increase padding slightly */
+      font-size: 1rem;      /* Make '+' a bit larger */
+    }
+    /* Ensure manual entry button is prominent */
+    #manual-add-btn {
+       padding-top: 0.5rem;
+       padding-bottom: 0.5rem;
+    }
+  }
+</style>
+{% endblock %}
+
+
 {# --- Content Block: Holds the main HTML structure --- #}
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-3 mt-md-4"> {# Reduced top margin slightly on smallest screens #}
 
   <!-- Event header -->
-  <div class="d-flex flex-wrap align-items-center mb-3">
-    <h2 class="me-3">
-      Scanning for: {{ event.event_name }}
-      ({{ event.gregorian_date.strftime('%Y-%m-%d') }})
-    </h2>
-    <div class="ms-auto d-flex align-items-center">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    {# Make header text slightly smaller on mobile if needed #}
+    <h2 class="me-3 h3">{{ event.event_name }} ({{ event.gregorian_date.strftime('%Y-%m-%d') }})</h2>
+
+    {# Button Group - allow wrapping #}
+    <div class="ms-auto d-flex flex-wrap gap-1"> {# Use gap for spacing, allows wrapping #}
         <a href="{{ url_for('main.edit_event', event_id=event.id) }}"
-           class="btn btn-outline-secondary btn-sm me-2">Edit Event</a>
+           class="btn btn-outline-secondary btn-sm">Edit Event</a>
         {# --- Delete Event Form --- #}
         {% if delete_event_form %}
         <form method="POST"
               action="{{ url_for('main.delete_event', event_id=event.id) }}"
               onsubmit="return confirm('Are you sure you want to delete this event and ALL its purchases? This cannot be undone.');"
-              class="d-inline me-2">
+              class="d-inline">
           {{ delete_event_form.hidden_tag() }}
           <button type="submit" class="btn btn-outline-danger btn-sm">Delete Event</button>
         </form>
@@ -33,58 +58,61 @@
               class="d-inline">
                 {# Use CSRF from one of the forms passed #}
                 {% if delete_event_form %}{{ delete_event_form.hidden_tag() }}{% elif manual_form %}{{ manual_form.hidden_tag() }}{% endif %}
-                <button type="submit" class="btn btn-warning btn-sm">Finish Scanning</button>
+                <button type="submit" class="btn btn-warning btn-sm">Finish</button> {# Shorten Text #}
          </form>
     </div>
   </div>
   <hr>
 
-  <div class="row">
+  <div class="row g-3"> {# Added gutter between columns #}
     <!-- Camera feed -->
-    <div class="col-12 col-md-6 mb-4">
-      <h4>Camera</h4>
-      <video id="camera" class="w-100 border bg-light" style="display:none;" playsinline muted></video> {# Start hidden #}
-      <p id="cam-error" class="text-danger mt-2 small"></p>
+    <div class="col-12 col-md-6 mb-3 mb-md-0"> {# Adjusted bottom margin #}
+      <h5>Camera</h5> {# Use h5 for slightly smaller heading #}
+      <video id="camera" class="w-100 border bg-light rounded" style="display:none;" playsinline muted></video> {# Start hidden, added rounded corners #}
+      <p id="cam-error" class="text-danger mt-1 small"></p> {# Reduced margin #}
       <div class="mt-2">
-        <button id="start-camera" class="btn btn-primary me-1">Start Camera</button>
-        <button id="stop-camera" class="btn btn-secondary" style="display:none;">Stop Camera</button>
+        <button id="start-camera" class="btn btn-primary btn-sm me-1">Start Cam</button> {# Shorten Text #}
+        <button id="stop-camera" class="btn btn-secondary btn-sm" style="display:none;">Stop Cam</button> {# Shorten Text #}
       </div>
     </div>
 
     <!-- Scan status -->
-    <div class="col-12 col-md-6 mb-4">
-      <h4>Status</h4>
+    <div class="col-12 col-md-6">
+      <h5>Status</h5>
       <div class="card">
-        <div class="card-body">
-          <p><strong>Buyer:</strong> <span id="current-buyer" class="fw-bold">None</span></p>
-          <p><strong>Item:</strong> <span id="current-item" class="fw-bold">None</span></p>
-          <p><strong>Total Price:</strong> <span class="fw-bold">₪<span id="current-total">0.00</span></span></p>
-          <div id="status-msg" class="alert alert-info mt-2">Waiting for scan…</div>
+        <div class="card-body p-2"> {# Reduced padding #}
+          <p class="mb-1"><strong>Buyer:</strong> <span id="current-buyer" class="fw-bold">None</span></p>
+          <p class="mb-1"><strong>Item:</strong> <span id="current-item" class="fw-bold">None</span></p>
+          <p class="mb-1"><strong>Total:</strong> <span class="fw-bold">₪<span id="current-total">0.00</span></span></p> {# Shorten Text #}
+          <div id="status-msg" class="alert alert-info mt-2 p-1 small mb-1">Waiting…</div> {# Smaller padding/margins #}
         </div>
       </div>
        <div class="mt-2 text-center">
-          <button id="clear-state-btn" class="btn btn-sm btn-outline-warning">Clear Current Buyer/Item</button>
+          <button id="clear-state-btn" class="btn btn-sm btn-outline-warning">Clear Buyer/Item</button>
       </div>
     </div>
   </div>
+  <hr class="my-3"> {# Add separator #}
 
   <!-- Manual Entry -->
-  <div class="card mb-4">
-      <div class="card-header">
-          <h5>Manual Entry / Donation</h5>
+  <div class="card mb-3">
+      <div class="card-header p-2"> {# Reduced padding #}
+          <h6>Manual Entry / Donation</h6> {# Use h6 #}
       </div>
-      <div class="card-body">
+      <div class="card-body p-2"> {# Reduced padding #}
           {% if manual_form %}
           <form id="manual-entry-form"
                 method="POST"
                 action="{{ url_for('scanning.manual_entry') }}">
             {{ manual_form.hidden_tag() }}
+            {# Use more granular columns for better stacking #}
             <div class="row g-2 align-items-end">
-              {# Buyer Select + Add Button #}
-              <div class="col-12 col-sm-6 col-md-3 col-lg-2">
-                <label for="manual-buyer-id" class="form-label">Buyer</label>
+
+              {# --- Buyer Group --- #}
+              <div class="col-12 col-sm-6 col-lg-4">
+                <label for="manual-buyer-id" class="form-label mb-1 small">Buyer</label>
                 <div class="input-group input-group-sm">
-                  {{ manual_form.buyer_id(class="form-select", id="manual-buyer-id") }}
+                  {{ manual_form.buyer_id(class="form-select form-select-sm", id="manual-buyer-id") }} {# Smaller select #}
                   <button id="add-buyer" type="button" title="Add New Buyer" class="btn btn-outline-secondary">+</button>
                 </div>
                 <div id="new-buyer-row" class="mt-1 border p-2 bg-light rounded" style="display:none;">
@@ -92,11 +120,12 @@
                   <div class="d-flex justify-content-end"> <button id="save-buyer" type="button" class="btn btn-sm btn-primary me-1">Save</button> <button id="cancel-buyer" type="button" class="btn btn-sm btn-secondary">Cancel</button> </div>
                 </div>
               </div>
-              {# Item Select + Add Button #}
-              <div class="col-12 col-sm-6 col-md-3 col-lg-2">
-                <label for="manual-item-id" class="form-label">Item</label>
+
+              {# --- Item Group --- #}
+              <div class="col-12 col-sm-6 col-lg-4">
+                <label for="manual-item-id" class="form-label mb-1 small">Item</label>
                  <div class="input-group input-group-sm">
-                    {{ manual_form.item_id(class="form-select", id="manual-item-id") }}
+                    {{ manual_form.item_id(class="form-select form-select-sm", id="manual-item-id") }} {# Smaller select #}
                     <button id="add-item" type="button" title="Add New Item" class="btn btn-outline-secondary">+</button>
                  </div>
                 <div id="new-item-row" class="mt-1 border p-2 bg-light rounded" style="display:none;">
@@ -104,46 +133,55 @@
                   <div class="d-flex justify-content-end"> <button id="save-item" type="button" class="btn btn-sm btn-primary me-1">Save</button> <button id="cancel-item" type="button" class="btn btn-sm btn-secondary">Cancel</button> </div>
                 </div>
               </div>
-              {# Price Input #}
-              <div class="col-12 col-sm-4 col-md-2 col-lg-2">
-                <label for="id_total_price" class="form-label">Price (₪)</label>
+
+              {# --- Price / Qty Group (Side-by-side on small screens) --- #}
+              <div class="col-6 col-sm-4 col-lg-2">
+                <label for="id_total_price" class="form-label mb-1 small">Price (₪)</label>
                 {{ manual_form.total_price(class="form-control form-control-sm", id="id_total_price", placeholder="₪0.00") }}
               </div>
-              {# Quantity Input #}
-              <div class="col-6 col-sm-3 col-md-1 col-lg-1">
-                <label for="id_quantity" class="form-label">Qty</label>
+              <div class="col-6 col-sm-2 col-lg-2"> {# Adjusted columns #}
+                <label for="id_quantity" class="form-label mb-1 small">Qty</label>
                 {{ manual_form.quantity(class="form-control form-control-sm", id="id_quantity", placeholder="1") }}
               </div>
-              {# Notes Input #}
-              <div class="col-6 col-sm-5 col-md-2 col-lg-3">
-                <label for="id_manual_entry_notes" class="form-label">Notes</label>
+
+              {# --- Notes Group --- #}
+              <div class="col-12 col-sm-6 col-lg-4">
+                <label for="id_manual_entry_notes" class="form-label mb-1 small">Notes</label>
                 {{ manual_form.manual_entry_notes(class="form-control form-control-sm", id="id_manual_entry_notes", rows="1", placeholder="Optional notes") }}
               </div>
-              {# Add Button #}
-              <div class="col-12 col-sm-12 col-md-2 col-lg-2">
-                <button id="manual-add-btn" type="button" class="btn btn-success w-100">Add Entry</button>
+
+              {# --- Add Button Group --- #}
+              <div class="col-12 col-sm-6 col-lg-4 d-grid"> {# Use d-grid for full width button on smallest #}
+                <button id="manual-add-btn" type="button" class="btn btn-success btn-sm">Add Manual Entry</button>
               </div>
             </div>
           </form>
           {% else %}
-             <p class="text-danger">Manual entry form not available.</p>
+             <p class="text-danger small">Manual entry form not available.</p>
           {% endif %}
         </div>
     </div>
 
   <!-- Current Purchases -->
-  <h4>Current Purchases for this Event</h4>
+  <h5>Purchases</h5>
+  {# Make table scrollable on small screens #}
   <div class="table-responsive mb-4">
-    <table class="table table-striped table-sm">
+    <table class="table table-striped table-sm table-hover"> {# Added hover effect #}
       <thead>
         <tr>
-          <th scope="col">Buyer</th> <th scope="col">Item</th> <th scope="col" class="text-end">Price</th>
-          <th scope="col" class="text-center">Qty</th> <th scope="col">Notes</th> <th scope="col">Time</th>
+          <th scope="col">Buyer</th>
+          <th scope="col">Item</th>
+          <th scope="col" class="text-end">Price</th>
+          <th scope="col" class="text-center">Qty</th>
+          {# Hide Notes on extra small screens #}
+          <th scope="col" class="d-none d-sm-table-cell">Notes</th>
+          {# Hide Time on small screens and below #}
+          <th scope="col" class="d-none d-md-table-cell">Time</th>
           <th scope="col" class="text-center">Actions</th>
         </tr>
       </thead>
       <tbody id="purchase-table-body"> {# Ensure this ID matches JS #}
-          <tr><td colspan="7" class="text-center text-muted">Loading purchases...</td></tr>
+          <tr><td colspan="7" class="text-center text-muted">Loading purchases...</td></tr> {# Adjust colspan based on visible columns #}
       </tbody>
     </table>
   </div>
@@ -154,16 +192,17 @@
 {# --- Scripts Block: Inherits from base.html --- #}
 {% block scripts %}
 
-<!-- Load ZXing library FIRST -->
+{# Load ZXing library FIRST (Local or CDN) #}
+{# <script src="{{ url_for('static', filename='js/zxing.library.js') }}"></script> #}
 <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
 
-<!-- Your custom scanner script -->
+<!-- Your custom scanner script (No changes needed in the JS for these layout adjustments) -->
 <script>
   // *** Wrap ALL custom logic in DOMContentLoaded ***
   window.addEventListener('DOMContentLoaded', async () => {
       console.log("DOMContentLoaded event fired. Initializing scanner script...");
 
-      // --- Elements (Select elements *after* DOM is ready) ---
+      // --- Elements ---
       const videoElem  = document.getElementById('camera');
       const startCamBtn= document.getElementById('start-camera');
       const stopCamBtn = document.getElementById('stop-camera');
@@ -174,7 +213,7 @@
       const totalDisplay = document.getElementById('current-total');
       const statusMsgElem = document.getElementById('status-msg');
       const clearStateBtn = document.getElementById('clear-state-btn');
-      // Check if elements were found (optional but good for debug)
+      // Check if elements were found
       if (!videoElem || !startCamBtn || !stopCamBtn || !camErrorElem || !purchaseTableBody || !buyerDisplay || !itemDisplay || !totalDisplay || !statusMsgElem || !clearStateBtn) {
           console.error("One or more essential DOM elements could not be found! Check IDs: camera, start-camera, stop-camera, cam-error, purchase-table-body, current-buyer, current-item, current-total, status-msg, clear-state-btn");
           if(camErrorElem) camErrorElem.textContent = "Page structure error: Essential elements missing.";
@@ -183,32 +222,32 @@
       console.log("DOM Elements selected successfully.");
 
       // --- State & Config ---
-      let codeReader; // Declare here
+      let codeReader;
       try {
-          // Initialize ZXing *after* DOM is ready and script is loaded
           codeReader = new ZXing.BrowserMultiFormatReader();
           console.log("ZXing codeReader initialized successfully.");
       } catch (e) {
           console.error("Error initializing ZXing Reader:", e);
           if(camErrorElem) camErrorElem.textContent = "Error initializing barcode scanner library.";
-          return; // Stop if scanner can't init
+          return;
       }
 
       let selectedDeviceId = null;
       let isCameraRunning = false;
       let lastBarcode = null;
       let lastBarcodeTime = 0;
-      const debounceTime = 1000; // ms between identical scans
-      console.log("State variables declared.");
+      const debounceTime = 1000;
+      // console.log("State variables declared.");
 
-      // --- URLs --- (These rely on Flask rendering correctly)
+       // --- URLs ---
       const PROCESS_SCAN_URL = '{{ url_for("scanning.process_scan") }}';
-      const LIST_PURCHASES_URL = '{{ url_for("scanning.list_purchases") }}'; // *** URL for fetching the list ***
+      const LIST_PURCHASES_URL = '{{ url_for("scanning.list_purchases") }}';
       const DELETE_PURCHASE_URL_BASE = '{{ url_for("scanning.delete_purchase", pid=0) }}'.replace('/0', '');
       const ADD_BUYER_URL = '{{ url_for("scanning.add_buyer") }}';
       const ADD_ITEM_URL = '{{ url_for("scanning.add_item") }}';
       const MANUAL_ENTRY_URL = '{{ url_for("scanning.manual_entry") }}';
-      console.log("URLs set:", { PROCESS_SCAN_URL, LIST_PURCHASES_URL, DELETE_PURCHASE_URL_BASE, ADD_BUYER_URL, ADD_ITEM_URL, MANUAL_ENTRY_URL });
+      // console.log("URLs set:", { PROCESS_SCAN_URL, LIST_PURCHASES_URL, DELETE_PURCHASE_URL_BASE, ADD_BUYER_URL, ADD_ITEM_URL, MANUAL_ENTRY_URL });
+
 
       // --- Camera Functions ---
       function startCamera() {
@@ -217,10 +256,9 @@
           codeReader.listVideoInputDevices()
             .then(videoInputDevices => {
               if (videoInputDevices.length > 0) {
-                  // Prefer environment camera if available
                   const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment'));
                   selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId;
-                  console.log(`Using video device: ${selectedDeviceId}`); // Log the device ID being used
+                  console.log(`Using video device: ${selectedDeviceId}`);
                   videoElem.style.display = 'block';
                   codeReader.decodeFromVideoDevice(selectedDeviceId, videoElem, handleDecodeResult)
                     .then(controls => {
@@ -236,6 +274,9 @@
       function stopCamera() {
           if (!codeReader) return;
           codeReader.reset();
+          if (videoElem.srcObject) { // Check if srcObject is set before stopping tracks
+             videoElem.srcObject.getTracks().forEach(track => track.stop());
+          }
           videoElem.style.display = 'none'; videoElem.srcObject = null;
           startCamBtn.style.display = 'inline-block'; stopCamBtn.style.display = 'none';
           isCameraRunning = false; console.log("Camera stopped.");
@@ -244,7 +285,7 @@
       function handleCameraError(err) {
           console.error("Camera Error:", err);
           if(camErrorElem) camErrorElem.textContent = `Camera error: ${err.message}. Please grant permission or check device.`;
-          stopCamera(); // Ensure cleanup
+          stopCamera();
       }
 
       // --- Barcode Handling ---
@@ -252,15 +293,13 @@
           if (result) {
               const code = result.getText(); const now = Date.now();
               if (code === lastBarcode && (now - lastBarcodeTime < debounceTime)) {
-                  // console.log("Debounce ignored:", code);
-                  return; // Ignore same code within debounce period
+                  return;
               }
               lastBarcode = code; lastBarcodeTime = now;
               console.log("Barcode Detected:", code);
               handleBarcode(code);
           }
           if (err && !(err instanceof ZXing.NotFoundException)) {
-             // Ignore NotFoundException, log others
              console.warn("Decoding Warning/Error:", err);
           }
       }
@@ -271,17 +310,16 @@
               const res = await fetch(PROCESS_SCAN_URL, { method: 'POST', headers: {'Content-Type':'application/json', 'Accept': 'application/json'}, credentials:'same-origin', body: JSON.stringify({barcode: code}) });
               if (!res.ok) { let errorMsg = `Server status ${res.status}`; try { const d = await res.json(); errorMsg = d.message || errorMsg; } catch (e) {} throw new Error(errorMsg); }
               const data = await res.json();
-              console.log("Server response from process_scan:", data);
+              // console.log("Server response from process_scan:", data);
               updateStateDisplay(data.state); showStatus(data.message, data.status);
-              // process_scan now returns the purchase list, so render it directly
               if(data.purchases) {
                   renderPurchases(data.purchases);
               } else {
                   console.warn("process_scan response did not include 'purchases' list.");
-                  await fetchPurchases(); // Fallback to fetching separately if needed
+                  await fetchPurchases();
               }
           } catch (error) {
-              console.error("Error processing scan:", error); showStatus(`Error: ${error.message}`, 'error'); updateStateDisplay({}); // Clear state display on error
+              console.error("Error processing scan:", error); showStatus(`Error: ${error.message}`, 'error'); updateStateDisplay({});
           }
       }
 
@@ -295,18 +333,18 @@
           if (!statusMsgElem) return;
           statusMsgElem.textContent = message; let alertClass = 'alert-info';
           if (type === 'success') alertClass = 'alert-success'; else if (type === 'error' || type === 'danger') alertClass = 'alert-danger'; else if (type === 'warning') alertClass = 'alert-warning';
-          statusMsgElem.className = `alert ${alertClass} mt-2`;
+          statusMsgElem.className = `alert ${alertClass} mt-2 p-1 small mb-1`; // Match smaller style
       }
       function clearCurrentScanState() { handleBarcode('BUYER:__CLEAR__'); showStatus('State cleared. Scan buyer.', 'info'); }
 
       // --- LOAD & RENDER PURCHASES ---
       async function fetchPurchases() {
-        console.log('Fetching purchases from:', LIST_PURCHASES_URL);
-        showTableMessage("Loading purchases..."); // Show loading state
+        // console.log('Fetching purchases from:', LIST_PURCHASES_URL);
+        showTableMessage("Loading purchases...");
 
         try {
             const res = await fetch(LIST_PURCHASES_URL, { method: 'GET', headers: {'Accept': 'application/json'}, credentials: 'same-origin' });
-            console.log('Fetch response status:', res.status);
+            // console.log('Fetch response status:', res.status);
 
             if (!res.ok) {
                 let errorText = `Failed to fetch purchases (Status: ${res.status} ${res.statusText})`;
@@ -317,7 +355,7 @@
             if (!contentType || !contentType.includes("application/json")) { throw new Error(`Expected JSON response for purchases, but got ${contentType}`); }
 
             let data;
-            try { data = await res.json(); console.log("Parsed JSON data for purchases:", data); }
+            try { data = await res.json(); /* console.log("Parsed JSON data for purchases:", data); */ }
             catch (parseError) {
                 console.error("JSON Parsing Error:", parseError); let rawText = "(Could not read raw text)";
                 try { const resClone = res.clone(); rawText = await resClone.text(); console.error("Raw response text:", rawText); } catch(e) {}
@@ -326,7 +364,7 @@
 
             if (!data || typeof data !== 'object' || !Array.isArray(data.purchases)) { throw new Error('Invalid data structure received (expected {"purchases": [...]})'); }
 
-            renderPurchases(data.purchases); // Call the render function
+            renderPurchases(data.purchases);
 
         } catch (error) {
             console.error('Error in fetchPurchases:', error); showTableMessage(`Error loading purchases: ${error.message}`, true);
@@ -334,45 +372,45 @@
       }
 
       function renderPurchases(purchases) {
-        console.log('Rendering purchases:', purchases);
+        // console.log('Rendering purchases:', purchases);
         if (!purchaseTableBody) { console.error("Fatal Error: purchaseTableBody element not found!"); return; }
-        purchaseTableBody.innerHTML = ''; // Clear existing rows
+        purchaseTableBody.innerHTML = '';
         if (!Array.isArray(purchases) || purchases.length === 0) {
             showTableMessage('No purchases recorded yet for this event.');
             return;
         }
 
         purchases.forEach(p => {
-            // console.log('Rendering purchase item:', p); // Log each item if needed
             const tr = document.createElement('tr');
-            // Use optional chaining and provide defaults for robustness
             const buyerName = p.buyer || 'Unknown';
             const itemName = p.item || 'Unknown';
             const priceStr = (typeof p.price === 'number') ? `₪${p.price.toFixed(2)}` : 'N/A';
             const quantity = p.quantity || 1;
             const notesStr = p.notes || '';
-            const timeStr = p.time || 'N/A'; // Assuming time is already formatted string
+            const timeStr = p.time || 'N/A';
             const manualBadge = p.manual ? '<span class="badge bg-secondary ms-1">Manual</span>' : '';
 
+            // Add responsive classes to cells matching header classes
             tr.innerHTML = `
                 <td>${buyerName}</td>
                 <td>${itemName} ${manualBadge}</td>
                 <td class="text-end">${priceStr}</td>
                 <td class="text-center">${quantity}</td>
-                <td class="small">${notesStr}</td>
-                <td class="small">${timeStr}</td>
+                <td class="small d-none d-sm-table-cell">${notesStr}</td>
+                <td class="small d-none d-md-table-cell">${timeStr}</td>
                 <td class="text-center">
                     <button class="btn btn-sm btn-outline-danger delete-purchase-btn" data-purchase-id="${p.id}" title="Delete Purchase">×</button>
                 </td>
             `;
             purchaseTableBody.appendChild(tr);
         });
-        addDeleteButtonListeners(); // Re-attach listeners after rendering
+        addDeleteButtonListeners();
       }
 
       function showTableMessage(message, isError = false) {
         if (!purchaseTableBody) return;
         const className = isError ? 'text-danger' : 'text-muted';
+        // Adjust colspan based on widest view (7 columns)
         purchaseTableBody.innerHTML = `<tr><td colspan="7" class="text-center ${className}">${message}</td></tr>`;
       }
 
@@ -380,10 +418,8 @@
       function addDeleteButtonListeners() {
         const deleteButtons = purchaseTableBody.querySelectorAll('.delete-purchase-btn');
         deleteButtons.forEach(button => {
-            // Remove existing listener to prevent duplicates if called multiple times
             button.replaceWith(button.cloneNode(true));
         });
-        // Add listeners to the new buttons
         purchaseTableBody.querySelectorAll('.delete-purchase-btn').forEach(button => {
              button.addEventListener('click', async (event) => {
                 const purchaseId = event.currentTarget.getAttribute('data-purchase-id');
@@ -394,15 +430,16 @@
         });
       }
       async function deletePurchase(purchaseId) {
-        console.log('Attempting to delete purchase ID:', purchaseId); showStatus('Deleting purchase...', 'info');
+        // console.log('Attempting to delete purchase ID:', purchaseId);
+        showStatus('Deleting purchase...', 'info');
         try {
             const deleteUrl = `${DELETE_PURCHASE_URL_BASE}/${purchaseId}`;
             const res = await fetch(deleteUrl, { method: 'DELETE', headers: {'Accept': 'application/json'}, credentials: 'same-origin' });
-            // Expecting {'success': true/false} from backend
             const data = await res.json();
             if (res.ok && data.success) {
-                console.log('Delete successful:', purchaseId); showStatus('Purchase deleted.', 'success');
-                await fetchPurchases(); // Refresh the list after successful deletion
+                // console.log('Delete successful:', purchaseId);
+                showStatus('Purchase deleted.', 'success');
+                await fetchPurchases();
             } else {
                 console.error('Delete failed:', purchaseId, res.status, data);
                 showStatus(`Failed to delete. ${data.message || `Server status ${res.status}`}`, 'error');
@@ -413,28 +450,24 @@
       // --- MANUAL ENTRY ---
       const manualAddBtn = document.getElementById('manual-add-btn');
       if (manualAddBtn) {
-          manualAddBtn.addEventListener('click', async () => { // Changed from onclick to addEventListener
+          manualAddBtn.addEventListener('click', async () => {
             const form = document.getElementById('manual-entry-form'); const fd = new FormData(form);
-            // Basic client-side validation
             if (!fd.get('buyer_id')) { alert('Please select a Buyer.'); return; } if (!fd.get('item_id')) { alert('Please select an Item.'); return; }
-            // Ensure price is not empty, default to 0 if blank
             if (!fd.get('total_price').trim()) fd.set('total_price', '0');
-            if (!fd.get('quantity').trim()) fd.set('quantity', '1'); // Default quantity if blank
+            if (!fd.get('quantity').trim()) fd.set('quantity', '1');
 
             showStatus('Adding manual entry...', 'info');
             try {
                 const res = await fetch(MANUAL_ENTRY_URL, { method:'POST', headers: {'Accept': 'application/json'}, credentials:'same-origin', body:fd });
-                const data = await res.json(); // Always try to parse response
+                const data = await res.json();
 
-                if (res.ok && data.purchases) { // Check if response is OK and contains the list
+                if (res.ok && data.purchases) {
                     showStatus('Manual entry added.', 'success');
-                    const bVal = fd.get('buyer_id'); const iVal = fd.get('item_id'); // Store selected values
-                    form.reset(); // Clear the form
-                    // Restore selected buyer/item if desired, or leave blank
+                    const bVal = fd.get('buyer_id'); const iVal = fd.get('item_id');
+                    form.reset();
                     form.querySelector('select[name="buyer_id"]').value = bVal; form.querySelector('select[name="item_id"]').value = iVal;
-                    renderPurchases(data.purchases); // Render the updated list returned from server
+                    renderPurchases(data.purchases);
                 } else {
-                    // Handle validation errors or other server errors
                     let eMsg = 'Error adding entry.';
                     if (data && data.errors) { eMsg = 'Validation errors: ' + JSON.stringify(data.errors); }
                     else if (data && data.message) { eMsg = data.message; }
@@ -453,47 +486,43 @@
           if (!selectElement || !addBtn || !addForm || !nameInput || !saveBtn || !cancelBtn) { console.error(`Missing elements for inline add '${type}'. Check IDs.`); return; }
           const inputGroup = selectElement.closest('.input-group'); if (!inputGroup) { console.error(`Could not find .input-group parent for ${type} select.`); return; }
           addBtn.addEventListener('click', () => { addForm.style.display = 'block'; inputGroup.style.display = 'none'; nameInput.value = ''; nameInput.placeholder = placeholder; nameInput.focus(); });
-          cancelBtn.addEventListener('click', () => { addForm.style.display = 'none'; inputGroup.style.display = 'flex'; }); // Use flex for input-group
+          cancelBtn.addEventListener('click', () => { addForm.style.display = 'none'; inputGroup.style.display = 'flex'; });
           saveBtn.addEventListener('click', async () => {
               const name = nameInput.value.trim(); if (!name) { alert(`Please enter the ${placeholder}.`); nameInput.focus(); return; }
               saveBtn.disabled = true; cancelBtn.disabled = true; saveBtn.textContent = "Saving...";
               try {
                   const res = await fetch(addUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json', 'Accept': 'application/json'}, body: JSON.stringify({name: name}) }); const data = await res.json();
-                  if (res.ok && data.id) { // Check for successful response and ID
-                     selectElement.add(new Option(data.name, data.id, true, true)); // Add and select the new option
+                  if (res.ok && data.id) {
+                     selectElement.add(new Option(data.name, data.id, true, true));
                      showStatus(`Added ${type}: ${data.name}`, 'success');
-                     cancelBtn.click(); // Hide the form
+                     cancelBtn.click();
                   } else { alert(`Error adding ${type}: ${data.error || `Server status ${res.status}`}`); }
               } catch (error) { alert(`Network error adding ${type}. Check console.`); console.error(`Error adding ${type}:`, error);
               } finally { saveBtn.disabled = false; cancelBtn.disabled = false; saveBtn.textContent = "Save"; }
           });
       }
 
-      // --- Attach Core Event Listeners (check elements exist) ---
+      // --- Attach Core Event Listeners ---
       if(startCamBtn) startCamBtn.addEventListener('click', startCamera); else console.warn("Start camera button not found.");
       if(stopCamBtn) stopCamBtn.addEventListener('click', stopCamera); else console.warn("Stop camera button not found.");
       if(clearStateBtn) clearStateBtn.addEventListener('click', clearCurrentScanState); else console.warn("Clear state button not found.");
-      console.log("Core event listeners attached.");
+      // console.log("Core event listeners attached.");
 
       // --- Initial Load ---
-      // Fetch the current state and purchases when the page loads
       console.log("Attempting initial purchase fetch...");
-      await fetchPurchases(); // *** This is the critical call for initial load ***
-      // Optionally, fetch initial state as well if needed, or rely on scan processing response
-      // updateStateDisplay(initialStateFromServer); // If you had an endpoint for current state
+      await fetchPurchases();
       console.log("Initial fetchPurchases call finished.");
 
   }); // End of DOMContentLoaded listener
 
 
   window.addEventListener('beforeunload', () => {
-      // Attempt to stop camera cleanly when leaving page
        if (typeof stopCamera === "function") {
             try { stopCamera(); } catch(e) { console.warn("Error during beforeunload stopCamera:", e); }
        }
   });
 
-  console.log("Scanner script outer block finished initial execution.");
+  // console.log("Scanner script outer block finished initial execution.");
 
 </script>
 

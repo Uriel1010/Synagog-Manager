@@ -84,12 +84,14 @@ def process_scan():
     try:
         # --- Buyer Scan ---
         if barcode.startswith('BUYER:'):
-            save_pending_purchase(session) # Save previous before switching
+            # *** Save any pending purchase from the *previous* buyer/item ***
+            save_pending_purchase(session)
             bid = barcode.split(':', 1)[1]
             logger.info(f"Scanned Buyer Barcode: {bid}")
             buyer = Buyer.query.filter_by(barcode_id=bid).first()
             if buyer:
                 logger.info(f"Buyer found: {buyer.name} (ID: {buyer.id})")
+                # Set new buyer, clear item and price from session state
                 session.update({
                     'scan_buyer_id': buyer.id, 'scan_buyer_name': buyer.name,
                     'scan_item_id': None, 'scan_item_name': None,
@@ -100,9 +102,8 @@ def process_scan():
             else:
                 logger.warning(f"Unknown buyer barcode scanned: '{bid}'")
                 response['message'] = f"Unknown buyer barcode: '{bid}'."
-                # Clear state if buyer not found
+                # Clear entire state (except event) if buyer not found
                 clear_scan_session_keys(clear_event=False) # Keep event_id
-                response['state'] = get_current_scan_state()
 
 
         # --- Item Scan ---
@@ -111,18 +112,21 @@ def process_scan():
                 logger.warning("Item scanned before buyer.")
                 response['message'] = 'Scan buyer first.'
             else:
-                save_pending_purchase(session) # Save previous before switching
+                # *** Save any pending purchase from the *previous* item ***
+                save_pending_purchase(session)
                 iid = barcode.split(':', 1)[1]
                 logger.info(f"Scanned Item Barcode: {iid}")
                 item = Item.query.filter_by(barcode_id=iid).first()
                 if item:
                     logger.info(f"Item found: {item.name} (ID: {item.id}), Unique: {item.is_unique}")
+                    # Set new item, MUST reset accumulated price to 0 for this new item scan
                     session.update({
                         'scan_item_id': item.id, 'scan_item_name': item.name,
-                        'scan_accumulated_price': 0.0 # Reset price for new item
+                        'scan_accumulated_price': 0.0 # <<< Reset price for the new item
                     })
                     session.modified = True
-                    msg = f"Item set: {item.name}. Scan price."
+                    msg = f"Item set: {item.name}. Scan price(s)."
+                    # Check uniqueness constraint (optional but good)
                     if item.is_unique:
                         existing = Purchase.query.filter_by(event_id=event_id, item_id=item.id).first()
                         if existing:
@@ -132,11 +136,13 @@ def process_scan():
                 else:
                     logger.warning(f"Unknown item barcode scanned: '{iid}'")
                     response['message'] = f"Unknown item barcode: '{iid}'."
+                    # Clear only item/price if item not found
                     session.update({'scan_item_id': None, 'scan_item_name': None, 'scan_accumulated_price': 0.0})
                     session.modified = True
 
         # --- Price Scan ---
         elif barcode.startswith('PRICE:'):
+            # Check if we have a buyer and item selected first
             if not session.get('scan_item_id'):
                 logger.warning("Price scanned before item.")
                 response['message'] = 'Scan item first.'
@@ -144,33 +150,29 @@ def process_scan():
                  logger.warning("Price scanned before buyer.")
                  response['message'] = 'Scan buyer first.'
             else:
+                # We have a buyer and an item, proceed to add price
                 try:
                     price_str = barcode.split(':', 1)[1]
                     price = float(price_str)
                     logger.info(f"Scanned Price: {price}")
+
+                    # *** Accumulate the price in the session ***
                     current_total = session.get('scan_accumulated_price', 0.0)
                     new_total = current_total + price
                     session['scan_accumulated_price'] = new_total
                     session.modified = True
-                    logger.info(f"Accumulated price updated to: {new_total}")
+                    logger.info(f"Accumulated price for item '{session.get('scan_item_name')}' updated to: {new_total}")
 
-                    # Save purchase immediately on price scan (as per older logic implied)
-                    logger.info("Price scanned, attempting to save pending purchase.")
-                    save_pending_purchase(session)
+                    # *** DO NOT SAVE YET ***
+                    # *** DO NOT RESET ITEM/PRICE STATE YET ***
 
-                    # Reset item/price state AFTER saving
-                    session.update({
-                        'scan_item_id': None, 'scan_item_name': None,
-                        'scan_accumulated_price': 0.0
-                    })
-                    session.modified = True
-                    logger.info("Item/Price state reset after saving purchase.")
-
+                    # Update response to show the *new accumulated total*
                     response.update(
                         status='success',
                         message=(
                           f"Added ₪{price:.2f}. "
-                          f"Purchase saved. Scan next item or buyer."
+                          f"Current total for {session.get('scan_item_name', 'item')} is ₪{new_total:.2f}. "
+                          f"Scan another price or next item/buyer."
                         )
                     )
 
@@ -184,7 +186,8 @@ def process_scan():
         # --- Clear Command ---
         elif barcode == 'BUYER:__CLEAR__':
             logger.info("Received clear state command.")
-            save_pending_purchase(session) # Save anything pending first
+            # *** Save any pending purchase before clearing ***
+            save_pending_purchase(session)
             clear_scan_session_keys(clear_event=False) # Keep event id
             response.update(status='success', message='State cleared. Scan buyer.')
 
@@ -198,10 +201,9 @@ def process_scan():
         response['message'] = 'A server error occurred during processing.'
         response['status'] = 'error'
 
-    # Update response state and include current purchase list
+    # Update response state (reflects current accumulation) and purchase list
     response['state'] = get_current_scan_state()
     try:
-        # *** Use the consistent helper name ***
         response['purchases'] = _get_list(event_id)
     except Exception as e_list:
         logger.exception(f"Error fetching purchase list after scan: {e_list}")
@@ -216,6 +218,7 @@ def process_scan():
 def finish_event():
     event_id = session.get('scan_event_id')
     logger.info(f"Finishing scanning for event ID: {event_id}. Saving any pending purchase.")
+    # *** Save the very last pending purchase ***
     save_pending_purchase(session)
     clear_scan_session_keys()
     session.modified = True
@@ -419,34 +422,57 @@ def get_current_scan_state():
     return state
 
 def save_pending_purchase(user_session):
-    """Saves a purchase if buyer, item are set. Saves even if price is zero."""
+    """
+    Saves a purchase to the database if a buyer, item, and event are
+    currently set in the session. Uses the 'scan_accumulated_price'.
+    This function is called *before* changing the buyer or item,
+    or when finishing/clearing.
+    """
     eid = user_session.get('scan_event_id')
     bid = user_session.get('scan_buyer_id')
     iid = user_session.get('scan_item_id')
-    price = user_session.get('scan_accumulated_price', 0.0) # Get accumulated price
+    # *** Use the accumulated price from the session ***
+    price = user_session.get('scan_accumulated_price', 0.0)
 
-    # Check if all required IDs are present
+    # Check if all required IDs are present AND if a price has been scanned/accumulated
+    # (We might not want to save if price is still 0, unless explicitly desired)
+    # Let's save even if price is 0, as it might represent a 'claimed' item.
     if eid and bid and iid:
-        logger.info(f"Attempting save_pending_purchase: E={eid}, B={bid}, I={iid}, Price={price}")
+        logger.info(f"Attempting save_pending_purchase: E={eid}, B={bid}, I={iid}, Accumulated Price={price}")
         try:
+            # Check if this exact item was already purchased by someone else if it's unique
+            # (Consider if this check is needed here or only on ITEM scan)
+            item = db.session.get(Item, iid)
+            if item and item.is_unique:
+                existing = Purchase.query.filter(
+                    Purchase.event_id == eid,
+                    Purchase.item_id == iid,
+                    Purchase.buyer_id != bid # Check if bought by *someone else*
+                ).first()
+                if existing:
+                    logger.warning(f"SAVE BLOCKED: Unique item '{item.name}' (ID:{iid}) already purchased by Buyer {existing.buyer_id} in Event {eid}. Cannot save for Buyer {bid}.")
+                    # Optionally flash a message or handle this in the response?
+                    # For now, just log and don't save.
+                    return # Exit the function, do not save
+
             purchase = Purchase(
                 event_id=eid, buyer_id=bid, item_id=iid,
                 total_price=price, quantity=1, # Assume quantity 1 for scans
-                is_manual_entry=False
+                is_manual_entry=False # This is for scanned entries
             )
             db.session.add(purchase)
             db.session.commit()
-            logger.info(f"Pending purchase saved (ID: {purchase.id}).")
+            logger.info(f"Pending purchase saved (ID: {purchase.id}). E={eid}, B={bid}, I={iid}, Price={price}")
             # Important: Do NOT clear state here. The calling function (process_scan)
-            # should decide when to clear state based on the scan type.
+            # decides when to clear parts of the state (e.g., item/price).
         except Exception as e:
             db.session.rollback()
             logger.exception(f"Failed save_pending_purchase (E:{eid}, B:{bid}, I:{iid}, P:{price}): {e}")
     else:
-        # Only log if something *was* set, indicating an incomplete state
+        # Log only if something *was* partially set, indicating an incomplete state that wasn't saved.
         if eid and (bid or iid):
-             logger.debug(f"No pending purchase to save. State: E={eid}, B={bid}, I={iid}")
-        pass # Nothing complete enough to save
+             logger.debug(f"No complete pending purchase to save. State: E={eid}, B={bid}, I={iid}")
+        # Otherwise, it's normal (e.g., first scan after loading page), do nothing.
 
 
 # *** Renamed helper to match newer code standard, keeping older logic/format ***
