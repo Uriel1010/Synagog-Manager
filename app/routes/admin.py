@@ -3,13 +3,15 @@ import io # For in-memory buffer
 import pandas as pd # For Excel generation
 from flask import (
     Blueprint, render_template, redirect, url_for, flash, request,
-    abort, make_response, jsonify # Added make_response, jsonify
+    abort, make_response, jsonify, current_app # Added make_response, jsonify
 )
 from flask_login import login_required, current_user
 from app import db
-from app.models import Buyer, Item
+from app.models import Buyer, Item, Purchase, Event
 from app.forms import BuyerForm, ItemForm, DeleteForm
 from app.utils.barcode_utils import generate_barcode_uri
+from sqlalchemy.orm import joinedload # Import joinedload for efficient queries
+
 # from app.forms import BuyerForm, ItemForm, DeleteForm # Already imported
 
 bp = Blueprint('admin', __name__)
@@ -331,3 +333,74 @@ def download_excel():
         # Redirect back or return an error response
         # Redirecting might lose the context, returning JSON error might be better for AJAX call
         return jsonify({"error": "Server error generating file"}), 500
+    
+
+# --- NEW: Buyer Card Route ---
+@bp.route('/buyer/<int:buyer_id>/card')
+@admin_required
+def buyer_card(buyer_id):
+    """Displays a detailed card view for a specific buyer."""
+    buyer = db.session.get(Buyer, buyer_id)
+    if not buyer:
+        flash(f"Buyer with ID {buyer_id} not found.", "warning")
+        return redirect(url_for('admin.list_buyers'))
+
+    # Query all purchases for this buyer, loading related data efficiently
+    purchases = Purchase.query.options(
+        joinedload(Purchase.item), # Load the Item object with the Purchase
+        joinedload(Purchase.event) # Load the Event object with the Purchase
+    ).filter(Purchase.buyer_id == buyer_id)\
+     .order_by(Purchase.timestamp.desc())\
+        .all()
+
+    # Calculate total spent by this buyer (optional but useful)
+    total_spent = db.session.query(db.func.sum(Purchase.total_price))\
+                            .filter(Purchase.buyer_id == buyer_id)\
+                            .scalar() or 0.0
+
+    return render_template(
+        'admin/buyer_card.html',
+        title=f"Buyer Card: {buyer.name}",
+        buyer=buyer,
+        purchases=purchases,
+        total_spent=total_spent
+    )
+
+
+# --- NEW: Item Purchase History Route ---
+@bp.route('/item/<int:item_id>/history')
+@admin_required
+def item_history(item_id):
+    """Displays recent purchase history for a specific item."""
+    item = db.session.get(Item, item_id)
+    if not item:
+        flash(f"Item with ID {item_id} not found.", "warning")
+        return redirect(url_for('admin.list_items'))
+
+    # Query recent purchases for this item
+    # Add a limit to avoid excessively long pages for popular items
+    limit = 50 # Show the last 50 purchases, adjust as needed
+    purchases = Purchase.query.options(
+        joinedload(Purchase.buyer), # Load the Buyer object
+        joinedload(Purchase.event)  # Load the Event object
+    ).filter(Purchase.item_id == item_id)\
+     .order_by(Purchase.timestamp.desc())\
+     .limit(limit)\
+     .all()
+
+    # Calculate total revenue from this item (optional)
+    total_revenue = db.session.query(db.func.sum(Purchase.total_price))\
+                              .filter(Purchase.item_id == item_id)\
+                              .scalar() or 0.0
+    purchase_count = Purchase.query.filter(Purchase.item_id == item_id).count()
+
+
+    return render_template(
+        'admin/item_history.html',
+        title=f"Item History: {item.name}",
+        item=item,
+        purchases=purchases,
+        total_revenue=total_revenue,
+        purchase_count=purchase_count,
+        limit=limit
+    )

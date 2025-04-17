@@ -32,6 +32,7 @@
                     <td>{% if item.is_unique %}<span class="badge bg-warning text-dark">Yes</span>{% else %}No{% endif %}</td>
                     <td>
                          <a href="{{ url_for('admin.edit_item', item_id=item.id) }}" class="btn btn-sm btn-warning me-1 mb-1" title="Edit">Edit</a>
+                         <a href="{{ url_for('admin.item_history', item_id=item.id) }}" class="btn btn-sm btn-info me-1 mb-1" title="View Purchase History">History</a>
                          {# Delete Form - Only show if no purchases exist #}
                          {% if not item.purchases.first() %}
                          <form action="{{ url_for('admin.delete_item', item_id=item.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this item?');">

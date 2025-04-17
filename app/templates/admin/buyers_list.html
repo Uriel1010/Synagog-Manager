@@ -30,6 +30,7 @@
                     <td>{{ buyer.barcode_id }}</td>
                     <td>
                         <a href="{{ url_for('admin.edit_buyer', buyer_id=buyer.id) }}" class="btn btn-sm btn-warning me-1 mb-1" title="Edit">Edit</a>
+                        <a href="{{ url_for('admin.buyer_card', buyer_id=buyer.id) }}" class="btn btn-sm btn-info me-1 mb-1" title="View Buyer Card">Card</a>
                         {# Delete Form - Only show if no purchases exist #}
                         {% if not buyer.purchases.first() %}
                         <form action="{{ url_for('admin.delete_buyer', buyer_id=buyer.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this buyer?');">
@@ -40,6 +41,7 @@
                          <button class="btn btn-sm btn-danger mb-1" disabled title="Cannot delete: Buyer has purchases">Delete</button>
                         {% endif %}
                     </td>
+
                 </tr>
                 {% endfor %}
             </tbody>

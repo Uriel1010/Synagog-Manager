@@ -2,23 +2,68 @@
 from datetime import datetime
 # Corrected imports based on dir(hdate) output:
 from hdate import HebrewDate, Location, Zmanim # Use HebrewDate instead of HDate
+from convertdate import hebrew
 
 # Define a default location (adjust as needed)
 # Doing this once avoids recreating it in both functions
 DEFAULT_LOCATION = Location(latitude=31.77, longitude=35.21, timezone="Asia/Jerusalem", name="Jerusalem")
 
-def get_hebrew_date_string(gregorian_dt: datetime):
-    """Takes a datetime object and returns a formatted Hebrew date string using hdate."""
-    try:
-        # Instantiate HebrewDate directly from the Python datetime object
-        # Location might not be strictly necessary for just the date string,
-        # but providing it is safer if underlying methods depend on it.
-        hd = HebrewDate(gregorian_dt, location=DEFAULT_LOCATION)
-        # Format the Hebrew date
-        return hd.hebrew_date_str(hebrew=False) # Set hebrew=True for Hebrew month names if desired
-    except Exception as e:
-        print(f"Error getting Hebrew date with hdate: {e}")
-        return "N/A"
+# Hebrew month names
+HEBREW_MONTH_NAMES = {
+    1:  "ניסן",
+    2:  "אייר",
+    3:  "סיון",
+    4:  "תמוז",
+    5:  "אב",
+    6:  "אלול",
+    7:  "תשרי",
+    8:  "חשוון",
+    9:  "כסלו",
+    10: "טבת",
+    11: "שבט",
+    12: "אדר",
+    13: "אדר ב׳"
+}
+
+HEBREW_LETTERS = {
+    1: "א", 2: "ב", 3: "ג", 4: "ד", 5: "ה", 6: "ו", 7: "ז", 8: "ח", 9: "ט",
+    10: "י", 20: "כ", 30: "ל", 40: "מ", 50: "נ", 60: "ס", 70: "ע", 80: "פ", 90: "צ",
+    100: "ק", 200: "ר", 300: "ש", 400: "ת"
+}
+
+def num_to_gematria(num):
+    if num >= 1000:
+        thousands = num // 1000
+        rest = num % 1000
+        return HEBREW_LETTERS[thousands] + "'" + _convert_gematria(rest)
+    return _convert_gematria(num)
+
+def _convert_gematria(num):
+    parts = []
+    for value in sorted(HEBREW_LETTERS.keys(), reverse=True):
+        while num >= value:
+            num -= value
+            parts.append(HEBREW_LETTERS[value])
+    # Handle special cases: 15 = ט״ו, 16 = ט״ז
+    if parts == ["י", "ה"]:
+        return "ט״ו"
+    if parts == ["י", "ו"]:
+        return "ט״ז"
+    return "".join(parts[:-1]) + "״" + parts[-1] if parts else ""
+
+def get_hebrew_date_string(date: datetime) -> str:
+    h_year, h_month, h_day = hebrew.from_gregorian(date.year, date.month, date.day)
+
+    if hebrew.leap(h_year) and h_month == 12:
+        month_name = "אדר א׳"
+    else:
+        month_name = HEBREW_MONTH_NAMES.get(h_month, f"חודש {h_month}")
+
+    day_str = num_to_gematria(h_day)
+    year_str = num_to_gematria(h_year % 1000)
+
+    return f"{day_str} {month_name} ה׳{year_str}"
+
 
 def get_parsha_string(gregorian_dt: datetime):
     """Gets the weekly Parsha for a given Gregorian date (if it's Shabbat) using hdate."""

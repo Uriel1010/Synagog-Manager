@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Buyer Card: {{ buyer.name }}</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('admin.list_buyers') }}" class="btn btn-sm btn-outline-secondary">
+                Back to Buyers List
+            </a>
+             <a href="{{ url_for('admin.edit_buyer', buyer_id=buyer.id) }}" class="btn btn-sm btn-outline-warning ms-2">
+                Edit Buyer
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <p><strong>Name:</strong> {{ buyer.name }}</p>
+            <p><strong>Barcode ID:</strong> {{ buyer.barcode_id }}</p>
+        </div>
+        <div class="col-md-6">
+             <p><strong>Total Purchases Found:</strong> {{ purchases|length }}</p>
+             <p><strong>Total Amount Spent:</strong> ₪{{ "%.2f"|format(total_spent) }}</p> {# Format currency #}
+        </div>
+    </div>
+
+
+    <h4>Purchase History (Most Recent First)</h4>
+    {% if purchases %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover table-sm">
+            <thead>
+                <tr>
+                    <th scope="col">Event</th>
+                    <th scope="col">Item</th>
+                    <th scope="col" class="text-end">Price</th>
+                    <th scope="col" class="text-center">Qty</th>
+                    <th scope="col">Timestamp</th>
+                    <th scope="col" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for purchase in purchases %}
+                <tr>
+                    <td>
+                        {# Link to the scanning page for this specific event #}
+                        <a href="{{ url_for('scanning.start_scanning', event_id=purchase.event.id) }}" title="Go to scan page for this event">
+                            {{ purchase.event.event_name }}
+                        </a>
+                         ({{ purchase.event.gregorian_date.strftime('%Y-%m-%d') }})
+                    </td>
+                    <td>{{ purchase.item.name if purchase.item else 'N/A' }}</td>
+                    <td class="text-end">₪{{ "%.2f"|format(purchase.total_price) }}</td>
+                    <td class="text-center">{{ purchase.quantity }}</td>
+                    <td class="small">{{ purchase.timestamp.strftime('%Y-%m-%d %H:%M:%S') if purchase.timestamp else 'N/A' }}</td>
+                    <td class="text-center">
+                        {# Add link to delete this specific purchase? Maybe too risky here? #}
+                        {# <a href="#" class="btn btn-xs btn-danger disabled" title="Delete Purchase (Not enabled)">X</a> #}
+                        -
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No purchases found for this buyer.</p>
+    {% endif %}
+
+{% endblock %}
