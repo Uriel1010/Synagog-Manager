@@ -4,44 +4,72 @@
 
 {% block head_extra %}
 <style>
+    /* Card styling */
+    .printable-card-item {
+        /* Wrapper for checkbox and card */
+        display: inline-block;
+        vertical-align: top;
+        margin: 5px;
+        padding: 5px;
+        border: 1px solid transparent; /* Add border for structure, hide visually unless printing */
+        page-break-inside: avoid;
+        text-align: center; /* Center checkbox */
+    }
+
     .barcode-card {
         border: 1px solid #ccc;
-        padding: 5px;       /* Less padding than before */
-        margin: 5px;
-        text-align: center;
-        display: inline-block;
-        width: 140px;       /* Make the card narrower */
-        vertical-align: top;
-        page-break-inside: avoid;
+        padding: 5px;
+        width: 140px;
+        display: block; /* Changed from inline-block to fit within wrapper */
+        margin-top: 3px; /* Space below checkbox */
     }
-    
+
     .barcode-label {
-        font-size: 0.85em;  /* Shrink the text a bit */
+        font-size: 0.85em;
         margin-bottom: 3px;
         word-wrap: break-word;
+        text-align: center; /* Ensure label is centered */
     }
-    
-    .barcode-card img {
+
+    .barcode-card img { /* Works for SVG too */
         max-width: 100%;
-        width: 300px; /* Further increase the barcode width for better recognition */
-        height: 60px; /* Increase the barcode height proportionally */
+        height: 40px;
         margin-top: 3px;
         display: block;
         margin-left: auto;
         margin-right: auto;
     }
-    
+
     .print-container {
         display: flex;
         flex-wrap: wrap;
         justify-content: flex-start;
+        align-items: flex-start;
     }
+
+    /* Print-specific styles */
     @media print {
         body * { visibility: hidden; }
         .print-area, .print-area * { visibility: visible; }
         .print-area { position: absolute; left: 0; top: 0; width: 100%; }
-        .no-print { display: none; }
-        .barcode-card { border: 1px solid #ddd; }
+        .no-print { display: none !important; } /* Hide controls */
+
+        .printable-card-item {
+             border: 1px solid #ddd; /* Optional: show faint border on print */
+             margin: 2px; /* Reduce margin for print */
+             padding: 2px;
+        }
+
+        /* --- Key rule: Hide items whose checkbox is NOT checked --- */
+        .printable-card-item.hide-for-print {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        .card-select-checkbox {
+             display: none !important; /* Hide checkboxes themselves */
+        }
+
+        .barcode-card { border: 1px solid #eee; } /* Lighter border on print */
     }
 </style>
 {% endblock %}
@@ -49,41 +77,66 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom no-print">
     <h1 class="h2">Print Barcode Cards</h1>
+    {# --- Button Toolbar --- #}
     <div class="btn-toolbar mb-2 mb-md-0">
-        <button onclick="window.print();" class="btn btn-sm btn-primary">Print This Page</button>
+        {# --- Download Button --- #}
+        <button id="download-excel-btn" class="btn btn-sm btn-success me-2">Download Selected as Excel</button>
+        {# --- Print Button --- #}
+        <button id="print-selected-btn" class="btn btn-sm btn-primary">Print Selected Cards</button>
     </div>
 </div>
 
-<div class="no-print">
-    <form method="POST" action="{{ url_for('admin.print_cards') }}" class="mb-4">
-        <div class="mb-3">
-            <label for="custom_prices" class="form-label">Custom Price Amounts (comma-separated)</label>
-            <input type="text" class="form-control" id="custom_prices" name="custom_prices"
-                   placeholder="e.g., 10,20,50" value="{{ default_prices }}">
+{# --- Controls Section --- #}
+<div class="no-print mb-4">
+    <form method="POST" action="{{ url_for('admin.print_cards') }}" class="mb-3 p-3 border rounded bg-light">
+        <h5 class="mb-3">Generate Price Cards</h5>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label for="custom_prices" class="form-label">Custom Price Amounts (comma-separated)</label>
+                <input type="text" class="form-control form-control-sm" id="custom_prices" name="custom_prices"
+                       placeholder="e.g., 10,20,50" value="{{ default_prices }}">
+            </div>
+            <div class="col-md-3">
+                <label for="copies" class="form-label">Copies per Amount</label>
+                <input type="number" class="form-control form-control-sm" id="copies" name="copies" value="{{ copies }}" min="1">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-secondary btn-sm w-100">Generate Custom Prices</button>
+            </div>
         </div>
-        <div class="mb-3">
-            <label for="copies" class="form-label">Number of Copies per Amount</label>
-            <input type="number" class="form-control" id="copies" name="copies" value="{{ copies }}">
-        </div>
-        <button type="submit" class="btn btn-primary">Generate Custom Price Cards</button>
     </form>
+
+    {# --- Selection Controls --- #}
+    <div class="d-flex justify-content-start align-items-center mb-2">
+        <button type="button" id="select-all-btn" class="btn btn-sm btn-outline-secondary me-2">Select All</button>
+        <button type="button" id="deselect-all-btn" class="btn btn-sm btn-outline-secondary">Deselect All</button>
+         <span id="selection-count" class="ms-3 text-muted small"></span> {# Optional counter #}
+    </div>
+
+    <p class="text-muted small">
+        Check the boxes for the cards you want to print or download. Use the buttons above. For printing, adjust scale/margins in the print preview.
+    </p>
 </div>
 
-<p class="no-print">
-    Use your browser's print function (Ctrl+P or Cmd+P) to print the generated cards. Adjust scale and margins as needed.
-</p>
-
+{# --- Card Display Area --- #}
 <div class="print-area">
-    <div class="print-container">
+    <div class="print-container" id="card-container"> {# Added ID for easier JS targeting #}
         {% if cards %}
             {% for card in cards %}
-                <div class="barcode-card">
-                    <div class="barcode-label">{{ card.label }}</div>
-                    {% if card.barcode_uri %}
-                        <img src="{{ card.barcode_uri }}" alt="Barcode for {{ card.label }}">
-                    {% else %}
-                        <p class="text-danger small">Error generating barcode</p>
-                    {% endif %}
+                {# --- Wrapper for Checkbox and Card - ADD data-raw-barcode --- #}
+                <div class="printable-card-item" data-raw-barcode="{{ card.raw_barcode }}">
+                     {# --- Checkbox --- #}
+                    <input type="checkbox" class="form-check-input card-select-checkbox no-print" checked data-label="{{ card.label }}">
+                    {# --- Original Card Content --- #}
+                    <div class="barcode-card">
+                        <div class="barcode-label">{{ card.label }}</div>
+                        {% if card.barcode_uri %}
+                            {# Works for SVG or PNG #}
+                            <img src="{{ card.barcode_uri }}" alt="Barcode for {{ card.label }}">
+                        {% else %}
+                            <p class="text-danger small m-0">Error</p> {# Compact error #}
+                        {% endif %}
+                    </div>
                 </div>
             {% endfor %}
         {% else %}
@@ -91,4 +144,175 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const selectAllBtn = document.getElementById('select-all-btn');
+    const deselectAllBtn = document.getElementById('deselect-all-btn');
+    const printSelectedBtn = document.getElementById('print-selected-btn');
+    const downloadExcelBtn = document.getElementById('download-excel-btn'); // <-- Get new button
+    const cardContainer = document.getElementById('card-container');
+    const selectionCountElem = document.getElementById('selection-count');
+    const downloadUrl = "{{ url_for('admin.download_excel') }}"; // <-- Get backend URL
+
+    // Function to get all selectable card items and checkboxes
+    function getCardCheckboxes() {
+        return cardContainer.querySelectorAll('.card-select-checkbox');
+    }
+    function getPrintableCardItems() {
+        return cardContainer.querySelectorAll('.printable-card-item');
+    }
+
+    // Function to update the selection count display
+    function updateSelectionCount() {
+        if (!selectionCountElem) return;
+        const checkboxes = getCardCheckboxes();
+        const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        const totalCount = checkboxes.length;
+        selectionCountElem.textContent = `${selectedCount} / ${totalCount} selected`;
+    }
+
+    // Event Listener for individual checkboxes
+    cardContainer.addEventListener('change', (event) => {
+        if (event.target.classList.contains('card-select-checkbox')) {
+            updateSelectionCount();
+        }
+    });
+
+
+    // Event Listener for Select All
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            getCardCheckboxes().forEach(checkbox => { checkbox.checked = true; });
+            updateSelectionCount();
+        });
+    }
+
+    // Event Listener for Deselect All
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', () => {
+            getCardCheckboxes().forEach(checkbox => { checkbox.checked = false; });
+            updateSelectionCount();
+        });
+    }
+
+    // Event Listener for Print Selected Button
+    if (printSelectedBtn) {
+        printSelectedBtn.addEventListener('click', () => {
+            const items = getPrintableCardItems();
+            let itemsToPrintCount = 0;
+
+            items.forEach(item => {
+                const checkbox = item.querySelector('.card-select-checkbox');
+                if (checkbox && !checkbox.checked) {
+                    item.classList.add('hide-for-print');
+                } else if (checkbox && checkbox.checked) {
+                    item.classList.remove('hide-for-print');
+                    itemsToPrintCount++;
+                } else {
+                     item.classList.add('hide-for-print');
+                }
+            });
+
+            if (itemsToPrintCount === 0) {
+                 alert("No cards selected to print.");
+                 items.forEach(item => item.classList.remove('hide-for-print'));
+                 return;
+            }
+            window.print();
+             setTimeout(() => {
+                items.forEach(item => { item.classList.remove('hide-for-print'); });
+             }, 500);
+        });
+    }
+
+    // --- NEW: Event Listener for Download Excel Button ---
+    if (downloadExcelBtn) {
+        downloadExcelBtn.addEventListener('click', async () => {
+            const selectedItemsData = [];
+            const items = getPrintableCardItems();
+
+            items.forEach(item => {
+                const checkbox = item.querySelector('.card-select-checkbox');
+                if (checkbox && checkbox.checked) {
+                    const label = checkbox.dataset.label || item.querySelector('.barcode-label')?.textContent || 'Unknown Label';
+                    const rawBarcode = item.dataset.rawBarcode || 'Unknown Barcode Data'; // Get from data attribute
+                    selectedItemsData.push({ label: label, raw_barcode: rawBarcode });
+                }
+            });
+
+            if (selectedItemsData.length === 0) {
+                alert("No items selected to download.");
+                return;
+            }
+
+            // Disable button during download
+            downloadExcelBtn.disabled = true;
+            downloadExcelBtn.textContent = 'Downloading...';
+
+            try {
+                // Send data to backend using Fetch API
+                const response = await fetch(downloadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        // Add CSRF token header here if needed globally for POST requests
+                    },
+                    body: JSON.stringify(selectedItemsData)
+                });
+
+                if (response.ok) {
+                    // Handle the file download
+                    const blob = await response.blob();
+                    const downloadLink = document.createElement('a');
+                    const url = window.URL.createObjectURL(blob);
+                    downloadLink.href = url;
+                    // Extract filename from Content-Disposition or use default
+                    let filename = 'selected_barcodes.xlsx';
+                    const disposition = response.headers.get('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        const matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    downloadLink.setAttribute('download', filename);
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink); // Clean up
+                    window.URL.revokeObjectURL(url); // Free up memory
+                } else {
+                    // Try to get error message from server response
+                    let errorMsg = `Download failed with status: ${response.status}`;
+                    try {
+                         const errorData = await response.json();
+                         errorMsg = errorData.error || errorMsg;
+                    } catch(e) {
+                         // Response wasn't JSON, use status text
+                         errorMsg = `${errorMsg} ${response.statusText}`;
+                    }
+                    console.error('Download error:', errorMsg);
+                    alert(`Failed to download Excel file: ${errorMsg}`);
+                }
+            } catch (error) {
+                console.error('Error during Excel download fetch:', error);
+                alert(`An error occurred while trying to download the file: ${error}`);
+            } finally {
+                // Re-enable button
+                downloadExcelBtn.disabled = false;
+                downloadExcelBtn.textContent = 'Download Selected as Excel';
+            }
+        });
+    }
+
+    // Initial count update on page load
+    updateSelectionCount();
+
+});
+</script>
 {% endblock %}

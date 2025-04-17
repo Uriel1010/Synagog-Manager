@@ -1,5 +1,6 @@
 # file: app/utils/barcode_utils.py
 import barcode
+# Import SVGWriter specifically
 from barcode.writer import ImageWriter, SVGWriter
 import io
 import base64
@@ -7,10 +8,7 @@ import logging
 
 from app import db
 from app.models import Buyer, Item
-# Corrected import for SQL functions: Use func object primarily
 from sqlalchemy import func, cast, Integer, String
-# Removed substring, text from here (text is still valid if needed, but not used now)
-# from sqlalchemy.sql.expression import text
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -18,44 +16,102 @@ logger = logging.getLogger(__name__)
 # Choose the barcode type (Code 128 is good for alphanumeric)
 BARCODE_TYPE = barcode.get_barcode_class('code128')
 
-def generate_barcode_bytes(data: str, writer_format='PNG'):
-    """Generates barcode image bytes."""
+# --- Constants for options ---
+# Adjust these values to fine-tune appearance and clarity
+# module_height is important for vertical size within the fixed CSS height
+MODULE_HEIGHT_MM = 8.0
+# quiet_zone is the blank space around the barcode (in mm)
+QUIET_ZONE_MM = 4.0
+# SVG specific options (write_text includes the human-readable text below)
+SVG_OPTIONS = {
+    'module_height': MODULE_HEIGHT_MM,
+    'quiet_zone': QUIET_ZONE_MM,
+    'write_text': True, # Include human-readable text below barcode
+    'text_distance': 3.0, # Distance between barcode and text (adjust if needed)
+    'font_size': 8,      # Font size for the text (adjust if needed)
+    # 'module_width': 0.2, # Optional: Uncomment and adjust (e.g., 0.2-0.3mm) if bars are too thin, but makes barcode wider
+}
+
+# PNG specific options (less critical now but kept for reference)
+PNG_OPTIONS = {
+    'module_height': MODULE_HEIGHT_MM,
+    'quiet_zone': QUIET_ZONE_MM,
+    'write_text': True,
+    'text_distance': 3.0,
+    'font_size': 8,
+}
+
+def generate_barcode_bytes(data: str, writer_format='SVG'): # Default to SVG
+    """Generates barcode image bytes (preferring SVG for clarity)."""
     if not data:
         return None
     try:
-        # Writer options can control module width, text visibility etc.
-        options = {'module_height': 8.0, 'font_size': 8, 'text_distance': 3.0, 'quiet_zone': 2.0}
-        if writer_format.upper() == 'SVG':
+        writer_format = writer_format.upper()
+        buffer = io.BytesIO()
+
+        if writer_format == 'SVG':
             writer = SVGWriter()
-        else: # Default to PNG
+            options = SVG_OPTIONS.copy() # Use a copy to avoid modification issues
+            # Instantiate the barcode object and write to buffer
+            bc = BARCODE_TYPE(data, writer=writer)
+            bc.write(buffer, options=options) # Pass SVG specific options
+            logger.debug(f"Generated SVG barcode for '{data}'")
+
+        elif writer_format == 'PNG':
              # Ensure Pillow is installed for ImageWriter
              try:
+                 from PIL import Image # Pillow import check
                  writer = ImageWriter(format='PNG')
+                 options = PNG_OPTIONS.copy()
+                 bc = BARCODE_TYPE(data, writer=writer)
+                 bc.write(buffer, options=options) # Pass PNG specific options
+                 logger.debug(f"Generated PNG barcode for '{data}'")
              except ImportError:
                   logger.error("Pillow library not found. PNG barcode generation requires Pillow. Please install it: pip install Pillow")
                   return None
+        else:
+             logger.error(f"Unsupported barcode writer format: {writer_format}")
+             return None
 
-
-        # Create an in-memory buffer
-        buffer = io.BytesIO()
-        # Instantiate the barcode object and write to buffer
-        bc = BARCODE_TYPE(data, writer=writer)
-        bc.write(buffer, options=options)
         buffer.seek(0)
         return buffer.read()
+
     except Exception as e:
-        logger.error(f"Error generating barcode bytes for '{data}': {e}", exc_info=True)
+        logger.error(f"Error generating barcode bytes for '{data}' (Format: {writer_format}): {e}", exc_info=True)
         return None
 
-def generate_barcode_uri(data: str, format='png'):
-    """Generates a Base64 Data URI for embedding in HTML."""
-    img_bytes = generate_barcode_bytes(data, writer_format=format)
+def generate_barcode_uri(data: str, format='svg'): # Default to SVG
+    """Generates a Base64 Data URI for embedding in HTML (preferring SVG)."""
+    # Ensure format is lowercase for checks
+    format = format.lower()
+    # Determine writer format based on desired output format
+    writer_format = 'SVG' if format == 'svg' else 'PNG'
+
+    img_bytes = generate_barcode_bytes(data, writer_format=writer_format)
+
     if img_bytes:
         encoded = base64.b64encode(img_bytes).decode('utf-8')
-        mime_type = 'image/svg+xml' if format.lower() == 'svg' else 'image/png'
-        return f"data:{mime_type};base64,{encoded}"
-    return None
+        if format == 'svg':
+             mime_type = 'image/svg+xml'
+             # SVGs generated by the library might not have XML declaration, add it for robustness
+             # Also, ensure UTF-8 encoding is declared within the SVG string for the data URI
+             # Decode bytes back to string to prepend XML declaration
+             svg_string = img_bytes.decode('utf-8')
+             # Basic check if XML declaration is already present
+             if not svg_string.strip().startswith('<?xml'):
+                 svg_string = '<?xml version="1.0" encoding="UTF-8"?>\n' + svg_string
+             # Re-encode for base64
+             encoded = base64.b64encode(svg_string.encode('utf-8')).decode('utf-8')
+             return f"data:{mime_type};base64,{encoded}"
+        else: # PNG
+             mime_type = 'image/png'
+             return f"data:{mime_type};base64,{encoded}"
+    else:
+         logger.warning(f"Failed to generate barcode bytes for URI (Format: {format}, Data: '{data}')")
+         return None
 
+
+# --- generate_next_barcode_id function remains unchanged ---
 def generate_next_barcode_id(prefix: str, starting_num: int = 1000) -> str | None:
     """
     Generates the next available barcode ID with a given prefix.
@@ -81,23 +137,16 @@ def generate_next_barcode_id(prefix: str, starting_num: int = 1000) -> str | Non
 
     try:
         prefix_len = len(prefix)
-        # *** Use func.substr for SQLite/PostgreSQL ***
-        # Use func.substring for more standard SQL dialects if needed
         max_num_query = db.session.query(
             func.max(
                 cast(
-                    # Use the appropriate function name (substr for SQLite)
                     func.substr(model_class.barcode_id, prefix_len + 1),
                     Integer
                 )
             )
         ).filter(model_class.barcode_id.like(f"{prefix}%"))
 
-        # Debug: Print the generated SQL (optional)
-        # from sqlalchemy.dialects import sqlite
-        # print(max_num_query.statement.compile(dialect=sqlite.dialect()))
-
-        max_num = max_num_query.scalar() # scalar() gets the first column of the first row, or None
+        max_num = max_num_query.scalar()
 
         next_num = (max_num + 1) if max_num is not None else starting_num
         next_id = f"{prefix.upper()}{next_num}"

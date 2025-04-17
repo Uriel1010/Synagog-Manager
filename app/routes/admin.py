@@ -1,11 +1,16 @@
 # file: app/routes/admin.py
-from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
+import io # For in-memory buffer
+import pandas as pd # For Excel generation
+from flask import (
+    Blueprint, render_template, redirect, url_for, flash, request,
+    abort, make_response, jsonify # Added make_response, jsonify
+)
 from flask_login import login_required, current_user
 from app import db
 from app.models import Buyer, Item
-from app.forms import BuyerForm, ItemForm, DeleteForm # Import DeleteForm
+from app.forms import BuyerForm, ItemForm, DeleteForm
 from app.utils.barcode_utils import generate_barcode_uri
-from app.forms import BuyerForm, ItemForm, DeleteForm # Ensure DeleteForm is imported
+# from app.forms import BuyerForm, ItemForm, DeleteForm # Already imported
 
 bp = Blueprint('admin', __name__)
 
@@ -29,6 +34,7 @@ def index():
     return render_template('admin/index.html', title='Admin Panel')
 
 # --- Buyer CRUD ---
+# ... (create_buyer, list_buyers, edit_buyer, delete_buyer remain the same) ...
 @bp.route('/buyers')
 @admin_required
 def list_buyers():
@@ -70,8 +76,59 @@ def create_buyer():
         return redirect(url_for('admin.list_buyers'))
     return render_template('admin/buyer_form.html', title='New Buyer', form=form, legend='New Buyer')
 
+@bp.route('/buyer/edit/<int:buyer_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_buyer(buyer_id):
+    buyer = db.session.get(Buyer, buyer_id)
+    if not buyer:
+        abort(404)
+    form = BuyerForm() # Create instance before checking request method
+
+    if form.validate_on_submit():
+        # Check validation result (important!)
+        buyer.name = form.name.data
+        buyer.barcode_id = form.barcode_id.data
+        db.session.commit()
+        flash('Buyer updated successfully!', 'success')
+        return redirect(url_for('admin.list_buyers'))
+    elif request.method == 'GET':
+        # Pre-populate form
+        form.name.data = buyer.name
+        form.barcode_id.data = buyer.barcode_id
+        form.original_barcode_id.data = buyer.barcode_id # Populate hidden field
+
+    # Pass the original buyer barcode ID to the template even on POST validation error
+    # so the hidden field gets repopulated.
+    if not form.original_barcode_id.data:
+         form.original_barcode_id.data = buyer.barcode_id
+
+    return render_template('admin/buyer_form.html', title='Edit Buyer', form=form, legend='Edit Buyer')
+
+@bp.route('/buyer/delete/<int:buyer_id>', methods=['POST'])
+@admin_required
+def delete_buyer(buyer_id):
+    buyer = db.session.get(Buyer, buyer_id)
+    if not buyer:
+        abort(404)
+
+    # Check if buyer has purchases - prevent deletion if they do (based on model relationship)
+    if buyer.purchases.first():
+         flash('Cannot delete buyer because they have associated purchases. Consider marking as inactive instead (feature not implemented).', 'danger')
+         return redirect(url_for('admin.list_buyers'))
+
+    form = DeleteForm()
+    if form.validate_on_submit():
+        db.session.delete(buyer)
+        db.session.commit()
+        flash('Buyer deleted successfully!', 'success')
+    else:
+        flash('Error deleting buyer. Please try again.', 'danger')
+
+    return redirect(url_for('admin.list_buyers'))
+
 
 # --- Item CRUD ---
+# ... (create_item, list_items, edit_item, delete_item remain the same) ...
 @bp.route('/items')
 @admin_required
 def list_items():
@@ -110,127 +167,6 @@ def create_item():
         return redirect(url_for('admin.list_items'))
     return render_template('admin/item_form.html', title='New Item', form=form, legend='New Item')
 
-# --- Barcode Card Generation Page ---
-@bp.route('/print_cards', methods=['GET', 'POST'])
-@admin_required
-def print_cards():
-    # Retrieve buyers and items as before
-    buyers = Buyer.query.order_by(Buyer.name).all()
-    items = Item.query.order_by(Item.name).all()
-
-    # Define a default list of prices (optional)
-    default_prices = [10, 20, 30, 40, 50]  # Example default prices
-
-    # Initialize variables
-    custom_prices = []
-    copies = 1  # default to 1 copy if no custom input is provided
-
-    # If the request is a POST, try to read custom values
-    if request.method == 'POST':
-        # Expect a comma-separated list of amounts
-        custom_prices_str = request.form.get('custom_prices', '')
-        copies_str = request.form.get('copies', '1')
-        try:
-            copies = int(copies_str)
-        except ValueError:
-            copies = 1
-        if custom_prices_str:
-            try:
-                # Parse the input string into a list of floats
-                custom_prices = [float(x.strip()) for x in custom_prices_str.split(',') if x.strip()]
-            except Exception as e:
-                flash('There was an error processing your custom prices. Using default prices.', 'warning')
-                custom_prices = default_prices
-        else:
-            custom_prices = default_prices
-    else:
-        # For GET requests, you could either use the default list or leave it empty.
-        custom_prices = default_prices
-
-    cards = []
-
-    # Generate buyer cards (unchanged)
-    for buyer in buyers:
-        barcode_data = f"BUYER:{buyer.barcode_id}"
-        cards.append({'label': buyer.name, 'barcode_uri': generate_barcode_uri(barcode_data)})
-
-    # Generate item cards (unchanged)
-    for item in items:
-        barcode_data = f"ITEM:{item.barcode_id}"
-        cards.append({'label': item.name, 'barcode_uri': generate_barcode_uri(barcode_data)})
-
-    # Generate price cards using custom or default prices.
-    price_cards = []
-    for price in custom_prices:
-        for _ in range(copies):
-            barcode_data = f"PRICE:{price:.2f}"
-            # Use the Israeli Shekel sign; you can also add extra formatting if needed.
-            price_label = f"₪{price:.2f}"
-            price_cards.append({'label': price_label, 'barcode_uri': generate_barcode_uri(barcode_data)})
-
-    cards.extend(price_cards)
-    valid_cards = [card for card in cards if card['barcode_uri']]
-
-    return render_template('admin/print_cards.html',
-                           title='Print Barcode Cards',
-                           cards=valid_cards,
-                           default_prices=",".join([str(p) for p in default_prices]),
-                           copies=copies)
-
-# --- Buyer Edit/Delete ---
-@bp.route('/buyer/edit/<int:buyer_id>', methods=['GET', 'POST'])
-@admin_required
-def edit_buyer(buyer_id):
-    buyer = db.session.get(Buyer, buyer_id)
-    if not buyer:
-        abort(404)
-    form = BuyerForm() # Create instance before checking request method
-
-    if form.validate_on_submit():
-        # Check validation result (important!)
-        buyer.name = form.name.data
-        buyer.barcode_id = form.barcode_id.data
-        db.session.commit()
-        flash('Buyer updated successfully!', 'success')
-        return redirect(url_for('admin.list_buyers'))
-    elif request.method == 'GET':
-        # Pre-populate form
-        form.name.data = buyer.name
-        form.barcode_id.data = buyer.barcode_id
-        form.original_barcode_id.data = buyer.barcode_id # Populate hidden field
-
-    # Pass the original buyer barcode ID to the template even on POST validation error
-    # so the hidden field gets repopulated.
-    if not form.original_barcode_id.data:
-         form.original_barcode_id.data = buyer.barcode_id
-
-    return render_template('admin/buyer_form.html', title='Edit Buyer', form=form, legend='Edit Buyer')
-
-
-@bp.route('/buyer/delete/<int:buyer_id>', methods=['POST'])
-@admin_required
-def delete_buyer(buyer_id):
-    buyer = db.session.get(Buyer, buyer_id)
-    if not buyer:
-        abort(404)
-
-    # Check if buyer has purchases - prevent deletion if they do (based on model relationship)
-    if buyer.purchases.first():
-         flash('Cannot delete buyer because they have associated purchases. Consider marking as inactive instead (feature not implemented).', 'danger')
-         return redirect(url_for('admin.list_buyers'))
-
-    form = DeleteForm()
-    if form.validate_on_submit():
-        db.session.delete(buyer)
-        db.session.commit()
-        flash('Buyer deleted successfully!', 'success')
-    else:
-        flash('Error deleting buyer. Please try again.', 'danger')
-
-    return redirect(url_for('admin.list_buyers'))
-
-
-# --- Item Edit/Delete ---
 @bp.route('/item/edit/<int:item_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_item(item_id):
@@ -280,3 +216,118 @@ def delete_item(item_id):
          flash('Error deleting item. Please try again.', 'danger')
 
     return redirect(url_for('admin.list_items'))
+
+# --- Barcode Card Generation Page ---
+@bp.route('/print_cards', methods=['GET', 'POST'])
+@admin_required
+def print_cards():
+    buyers = Buyer.query.order_by(Buyer.name).all()
+    items = Item.query.order_by(Item.name).all()
+    default_prices = [10, 20, 30, 40, 50]
+    custom_prices = []
+    copies = 1
+
+    if request.method == 'POST':
+        custom_prices_str = request.form.get('custom_prices', '')
+        copies_str = request.form.get('copies', '1')
+        try: copies = max(1, int(copies_str)) # Ensure at least 1 copy
+        except ValueError: copies = 1
+
+        if custom_prices_str:
+            try:
+                custom_prices = [float(x.strip()) for x in custom_prices_str.split(',') if x.strip()]
+            except Exception:
+                flash('Error processing custom prices. Using default.', 'warning')
+                custom_prices = default_prices
+        else:
+            custom_prices = default_prices
+    else:
+        custom_prices = default_prices
+
+    cards_data = [] # Store dicts with all needed info
+
+    # Generate buyer cards data
+    for buyer in buyers:
+        barcode_data = f"BUYER:{buyer.barcode_id}"
+        cards_data.append({
+            'label': buyer.name,
+            'barcode_uri': generate_barcode_uri(barcode_data),
+            'raw_barcode': barcode_data # *** Add raw data for JS ***
+        })
+
+    # Generate item cards data
+    for item in items:
+        barcode_data = f"ITEM:{item.barcode_id}"
+        cards_data.append({
+            'label': item.name,
+            'barcode_uri': generate_barcode_uri(barcode_data),
+            'raw_barcode': barcode_data # *** Add raw data for JS ***
+         })
+
+    # Generate price cards data
+    for price in custom_prices:
+        for _ in range(copies):
+            barcode_data = f"PRICE:{price:.2f}"
+            price_label = f"₪{price:.2f}"
+            cards_data.append({
+                'label': price_label,
+                'barcode_uri': generate_barcode_uri(barcode_data),
+                'raw_barcode': barcode_data # *** Add raw data for JS ***
+            })
+
+    # Filter out any cards where barcode generation failed (unlikely with SVG but good practice)
+    valid_cards_data = [card for card in cards_data if card['barcode_uri']]
+
+    return render_template('admin/print_cards.html',
+                           title='Print Barcode Cards',
+                           cards=valid_cards_data, # Pass the list of dictionaries
+                           default_prices=",".join([str(p) for p in default_prices]),
+                           copies=copies)
+
+
+# --- NEW ROUTE: Download Selected Barcodes as Excel ---
+@bp.route('/download_excel', methods=['POST'])
+@admin_required
+def download_excel():
+    """Receives selected barcode data and generates an Excel file."""
+    try:
+        selected_data = request.get_json()
+        if not selected_data or not isinstance(selected_data, list):
+            flash('No data received or invalid format for download.', 'warning')
+            # Return a JSON error response perhaps?
+            return jsonify({"error": "Invalid data received"}), 400
+
+        # Create DataFrame using pandas
+        df = pd.DataFrame(selected_data)
+        if df.empty:
+             flash('No items were selected for download.', 'warning')
+             # Or handle differently
+             return jsonify({"error": "No items selected"}), 400
+
+        # Ensure columns exist and rename if necessary (df columns match keys in JS object)
+        df = df.rename(columns={'label': 'Label', 'raw_barcode': 'Barcode Data'})
+
+        # Create an in-memory Excel file
+        output = io.BytesIO()
+        # Use openpyxl engine explicitly
+        writer = pd.ExcelWriter(output, engine='openpyxl')
+        df.to_excel(writer, index=False, sheet_name='Selected Barcodes')
+        # Don't close the writer with 'with' statement if using BytesIO directly like this
+        # writer.save() # save is deprecated, use close
+        writer.close() # Correct way to finalize the Excel data in buffer
+        output.seek(0)
+
+        # Create response
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = 'attachment; filename=selected_barcodes.xlsx'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+        return response
+
+    except Exception as e:
+        # Log the error for debugging
+        current_app.logger.error(f"Error generating Excel file: {e}", exc_info=True)
+        flash('An error occurred while generating the Excel file.', 'danger')
+        # Redirect back or return an error response
+        # Redirecting might lose the context, returning JSON error might be better for AJAX call
+        return jsonify({"error": "Server error generating file"}), 500

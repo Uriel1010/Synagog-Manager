@@ -17,3 +17,6 @@ tzdata # <-- ADD THIS for timezone database on Windows/etc.
 gunicorn # WSGI server for deployment (optional but recommended)
 python-bidi
 arabic-reshaper
+# requirements.txt (add these lines)
+pandas>=1.0.0
+openpyxl>=3.0.0
