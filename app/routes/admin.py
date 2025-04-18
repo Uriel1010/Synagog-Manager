@@ -1,34 +1,24 @@
 # file: app/routes/admin.py
-import io # For in-memory buffer
-import pandas as pd # For Excel generation
+import io
+import pandas as pd
 from flask import (
     Blueprint, render_template, redirect, url_for, flash, request,
-    abort, make_response, jsonify, current_app # Added make_response, jsonify
+    abort, make_response, jsonify, current_app
 )
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user # Keep login_required if used elsewhere
+from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError # Needed for bulk routes
 from app import db
 from app.models import Buyer, Item, Purchase, Event
 from app.forms import BuyerForm, ItemForm, DeleteForm
-from app.utils.barcode_utils import generate_barcode_uri
-from sqlalchemy.orm import joinedload # Import joinedload for efficient queries
-
-# from app.forms import BuyerForm, ItemForm, DeleteForm # Already imported
+from app.utils.barcode_utils import generate_barcode_uri, generate_next_barcode_id
+# --- Import the decorator ---
+from app.decorators import admin_required, api_key_required # <-- Import new one
 
 bp = Blueprint('admin', __name__)
 
-
 # Decorator for admin-only access (Example)
 from functools import wraps
-
-def admin_required(f):
-    @wraps(f)
-    @login_required
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_admin:
-            flash('Admin access required.', 'danger')
-            return redirect(url_for('main.index'))
-        return f(*args, **kwargs)
-    return decorated_function
 
 @bp.route('/')
 @admin_required
@@ -404,3 +394,216 @@ def item_history(item_id):
         purchase_count=purchase_count,
         limit=limit
     )
+
+# --- NEW: Bulk Buyer Creation API ---
+@bp.route('/buyers/bulk', methods=['POST'])
+@api_key_required # <-- USE API KEY DECORATOR
+def bulk_add_buyers():
+    """
+    API endpoint to add multiple buyers in bulk.
+    Expects JSON: { "buyers": [ { "name": "...", "barcode_id": "..." (optional) }, ... ] }
+    Returns JSON summary of successes and failures.
+    """
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 415 # Unsupported Media Type
+
+    data = request.get_json()
+    if not data or 'buyers' not in data or not isinstance(data['buyers'], list):
+        return jsonify({"error": "Invalid format. Expected JSON with a 'buyers' list."}), 400
+
+    input_buyers = data['buyers']
+    results = {
+        "processed_count": len(input_buyers),
+        "success_count": 0,
+        "failed_count": 0,
+        "created_buyers": [],
+        "errors": []
+    }
+
+    for buyer_data in input_buyers:
+        if not isinstance(buyer_data, dict):
+            results['failed_count'] += 1
+            results['errors'].append({"input": buyer_data, "error": "Invalid item format, expected dictionary."})
+            continue
+
+        name = buyer_data.get('name', '').strip()
+        provided_barcode = buyer_data.get('barcode_id', '').strip() or None # Treat empty string as None
+
+        # --- Validation ---
+        if not name:
+            results['failed_count'] += 1
+            results['errors'].append({"input": buyer_data, "error": "Buyer name is required."})
+            continue
+
+        # Check for existing name (case-insensitive) - Optional: Decide if names must be unique
+        # existing_name = Buyer.query.filter(func.lower(Buyer.name) == func.lower(name)).first()
+        # if existing_name:
+        #     results['failed_count'] += 1
+        #     results['errors'].append({"input": buyer_data, "error": f"Buyer name '{name}' already exists."})
+        #     continue
+
+        barcode_to_use = provided_barcode
+        if barcode_to_use:
+            # Check if provided barcode already exists
+            existing_barcode = Buyer.query.filter(Buyer.barcode_id == barcode_to_use).first()
+            if existing_barcode:
+                results['failed_count'] += 1
+                results['errors'].append({"input": buyer_data, "error": f"Barcode ID '{barcode_to_use}' already exists."})
+                continue
+        else:
+            # Auto-generate barcode
+            try:
+                barcode_to_use = generate_next_barcode_id('B')
+                if not barcode_to_use:
+                    raise ValueError("Failed to generate barcode ID.") # Trigger except block
+            except Exception as e:
+                 current_app.logger.error(f"Error generating barcode for buyer '{name}': {e}", exc_info=True)
+                 results['failed_count'] += 1
+                 results['errors'].append({"input": buyer_data, "error": "Failed to auto-generate barcode ID."})
+                 continue
+
+        # --- Attempt to Create ---
+        new_buyer = Buyer(name=name, barcode_id=barcode_to_use)
+        try:
+            db.session.add(new_buyer)
+            db.session.commit() # Commit each one individually for better error isolation
+            results['success_count'] += 1
+            results['created_buyers'].append({
+                "id": new_buyer.id,
+                "name": new_buyer.name,
+                "barcode_id": new_buyer.barcode_id
+            })
+            current_app.logger.info(f"Bulk API: Created Buyer ID {new_buyer.id}, Name: {new_buyer.name}")
+
+        except IntegrityError as e: # Catch potential unique constraint violations if commit fails
+             db.session.rollback()
+             current_app.logger.warning(f"Bulk API IntegrityError adding buyer '{name}' (likely duplicate barcode race condition or other constraint): {e}")
+             results['failed_count'] += 1
+             results['errors'].append({"input": buyer_data, "error": f"Database constraint error (likely duplicate barcode '{barcode_to_use}' created concurrently)."})
+        except Exception as e:
+            db.session.rollback() # Rollback on *any* other error during add/commit
+            current_app.logger.error(f"Bulk API Error adding buyer '{name}': {e}", exc_info=True)
+            results['failed_count'] += 1
+            results['errors'].append({"input": buyer_data, "error": f"Server error creating buyer: {e}"})
+
+    status_code = 200 if results['processed_count'] > 0 else 400 # Use 200 even for partial success
+    status_msg = "Completed"
+    if results['failed_count'] > 0 and results['success_count'] > 0:
+        status_msg = "Completed with errors"
+    elif results['failed_count'] > 0 and results['success_count'] == 0:
+         status_msg = "Failed"
+         # Optionally change status code if *all* fail due to validation?
+         # if all(err['error'].endswith("is required.") or err['error'].endswith("already exists.") for err in results['errors']):
+         #     status_code = 400 # Bad Request if all validation errors
+
+    results['status'] = status_msg
+    return jsonify(results), status_code
+
+
+# --- NEW: Bulk Item Creation API ---
+@bp.route('/items/bulk', methods=['POST'])
+@api_key_required # <-- USE API KEY DECORATOR
+def bulk_add_items():
+    """
+    API endpoint to add multiple items in bulk.
+    Expects JSON: { "items": [ { "name": "...", "barcode_id": "..." (optional), "is_unique": bool (optional, default false) }, ... ] }
+    Returns JSON summary of successes and failures.
+    """
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 415
+
+    data = request.get_json()
+    if not data or 'items' not in data or not isinstance(data['items'], list):
+        return jsonify({"error": "Invalid format. Expected JSON with an 'items' list."}), 400
+
+    input_items = data['items']
+    results = {
+        "processed_count": len(input_items),
+        "success_count": 0,
+        "failed_count": 0,
+        "created_items": [],
+        "errors": []
+    }
+
+    for item_data in input_items:
+        if not isinstance(item_data, dict):
+            results['failed_count'] += 1
+            results['errors'].append({"input": item_data, "error": "Invalid item format, expected dictionary."})
+            continue
+
+        name = item_data.get('name', '').strip()
+        provided_barcode = item_data.get('barcode_id', '').strip() or None
+        # Default is_unique to False if missing or not explicitly true
+        is_unique = item_data.get('is_unique', False)
+        if not isinstance(is_unique, bool): # Basic type check
+             is_unique = False
+
+        # --- Validation ---
+        if not name:
+            results['failed_count'] += 1
+            results['errors'].append({"input": item_data, "error": "Item name is required."})
+            continue
+
+        # Check for existing name (case-insensitive) - Optional: Decide if item names must be unique
+        # existing_name = Item.query.filter(func.lower(Item.name) == func.lower(name)).first()
+        # if existing_name:
+        #     results['failed_count'] += 1
+        #     results['errors'].append({"input": item_data, "error": f"Item name '{name}' already exists."})
+        #     continue
+
+        barcode_to_use = provided_barcode
+        if barcode_to_use:
+            # Check if provided barcode already exists
+            existing_barcode = Item.query.filter(Item.barcode_id == barcode_to_use).first()
+            if existing_barcode:
+                results['failed_count'] += 1
+                results['errors'].append({"input": item_data, "error": f"Barcode ID '{barcode_to_use}' already exists."})
+                continue
+        else:
+            # Auto-generate barcode
+            try:
+                barcode_to_use = generate_next_barcode_id('I')
+                if not barcode_to_use:
+                    raise ValueError("Failed to generate barcode ID.")
+            except Exception as e:
+                 current_app.logger.error(f"Error generating barcode for item '{name}': {e}", exc_info=True)
+                 results['failed_count'] += 1
+                 results['errors'].append({"input": item_data, "error": "Failed to auto-generate barcode ID."})
+                 continue
+
+        # --- Attempt to Create ---
+        new_item = Item(name=name, barcode_id=barcode_to_use, is_unique=is_unique)
+        try:
+            db.session.add(new_item)
+            db.session.commit() # Commit each one
+            results['success_count'] += 1
+            results['created_items'].append({
+                "id": new_item.id,
+                "name": new_item.name,
+                "barcode_id": new_item.barcode_id,
+                "is_unique": new_item.is_unique
+            })
+            current_app.logger.info(f"Bulk API: Created Item ID {new_item.id}, Name: {new_item.name}")
+
+        except IntegrityError as e:
+             db.session.rollback()
+             current_app.logger.warning(f"Bulk API IntegrityError adding item '{name}': {e}")
+             results['failed_count'] += 1
+             results['errors'].append({"input": item_data, "error": f"Database constraint error (likely duplicate barcode '{barcode_to_use}' created concurrently)."})
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Bulk API Error adding item '{name}': {e}", exc_info=True)
+            results['failed_count'] += 1
+            results['errors'].append({"input": item_data, "error": f"Server error creating item: {e}"})
+
+
+    status_code = 200 if results['processed_count'] > 0 else 400
+    status_msg = "Completed"
+    if results['failed_count'] > 0 and results['success_count'] > 0:
+        status_msg = "Completed with errors"
+    elif results['failed_count'] > 0 and results['success_count'] == 0:
+         status_msg = "Failed"
+         # Optionally change status code if *all* fail due to validation?
+
+    results['status'] = status_msg
+    return jsonify(results), status_code
