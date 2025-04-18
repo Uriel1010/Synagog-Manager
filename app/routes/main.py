@@ -101,3 +101,9 @@ def delete_event(event_id):
         flash('Error deleting event. Please try again.', 'danger')
 
     return redirect(url_for('main.list_events'))
+
+@bp.route('/help')
+@login_required # Requires login to see help page
+def help_page():
+    """Renders the help and documentation page."""
+    return render_template('help/index.html', title="Help & Documentation")

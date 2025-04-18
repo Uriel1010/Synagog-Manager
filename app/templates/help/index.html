@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}עזרה ותיעוד{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 text-end px-3" dir="rtl">
+    <h1 class="mb-4">עזרה ותיעוד</h1>
+
+    <!-- כפתור TOC לנייד -->
+    <button class="btn btn-secondary mb-3 d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#toc">
+        תוכן העניינים
+    </button>
+
+    <!-- TOC ברוחב מלא במובייל, בעמודה ב-md+ -->
+    <nav id="toc" class="collapse d-md-block mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">תוכן העניינים</div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item"><a href="#general">שימוש כללי</a></li>
+                <li class="list-group-item"><a href="#scanning">תהליך סריקה</a></li>
+                <li class="list-group-item"><a href="#reports">דו"חות</a></li>
+                <li class="list-group-item"><a href="#admin">פונקציות ניהול</a></li>
+                <li class="list-group-item">
+                    <a href="#api">שימוש ב-API (ייבוא בכמות גדולה)</a>
+                    <ul class="ps-3 mt-2">
+                        <li><a href="#api-auth">אימות</a></li>
+                        <li><a href="#api-buyers">הוספת קונים בכמות</a></li>
+                        <li><a href="#api-items">הוספת פריטים בכמות</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- General Usage -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h2 id="general" class="h5 mb-0">שימוש כללי</h2>
+        </div>
+        <div class="card-body text-end">
+            <p>יישום זה עוזר לעקוב אחר רכישות והתחייבויות במהלך אירועי בית הכנסת.</p>
+            <ul>
+                <li><strong>לוח מחוונים (Dashboard):</strong> קישורים מהירים לפעולות נפוצות ואירועים אחרונים.</li>
+                <li><strong>אירועים:</strong> ניהול אירועים; יש ליצור אירוע לפני הסריקה.</li>
+                <li><strong>התחברות/התנתקות:</strong> קישורים בפינה הימנית העליונה.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Scanning Workflow -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h2 id="scanning" class="h5 mb-0">תהליך סריקה</h2>
+        </div>
+        <div class="card-body text-end">
+            <ol class="ps-4">
+                <li><strong>בחירת אירוע:</strong> עבורו ל"Events" ולחצו על "Scan".</li>
+                <li><strong>הפעלת מצלמה:</strong> לחצו "Start Cam" ואשרו הרשאה.</li>
+                <li><strong>סריקת קונה:</strong> סרקו כרטיס קונה; שמו יופיע.</li>
+                <li><strong>סריקת פריט:</strong> סרקו ברקוד פריט; שמו יופיע.</li>
+                <li><strong>סריקת מחיר:</strong> סרקו ברקודים של סכומים; הסכום יתעדכן.</li>
+                <li><strong>חזרה:</strong> סריקת פריט נוסף ושוב מחיריו שומרת אוטומטית.</li>
+                <li><strong>קונה חדש:</strong> סריקה של קונה חדש שומרת רכישה קודמת.</li>
+                <li><strong>הזנה ידנית:</strong> מלאו טופס לבחירת קונה, פריט, מחיר והערות.</li>
+                <li><strong>ניקוי מצב:</strong> לחצו "Clear Buyer/Item" לביטול צבירה.</li>
+                <li><strong>סיום סריקה:</strong> לחצו "Finish" לשמירה וחזרה לרשימת אירועים.</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Reports -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h2 id="reports" class="h5 mb-0">דו"חות</h2>
+        </div>
+        <div class="card-body text-end">
+            <ul>
+                <li><strong>PDF Summary:</strong> PDF מעוצב להדפסה, רכישות לפי קונה.</li>
+                <li><strong>Buyer Summary:</strong> Excel/CSV סכומים לפי קונה.</li>
+                <li><strong>Item Summary:</strong> Excel/CSV כמות וסכום לפי פריט.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Admin Functions -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h2 id="admin" class="h5 mb-0">פונקציות ניהול</h2>
+        </div>
+        <div class="card-body text-end">
+            <ul>
+                <li><strong>Manage Buyers:</strong> יצירה, עריכה, צפייה בכרטיס, הסרה אם אין רכישות.</li>
+                <li><strong>Manage Items:</strong> יצירה, עריכה, סימון ייחודי, היסטוריה והסרה.</li>
+                <li><strong>Print Cards:</strong> ברקודים להדפסה של קונים, פריטים וסכומים.</li>
+                <li><strong>API Access:</strong> ייבוא בכמות גדולה בעזרת API.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- API Usage -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h2 id="api" class="h5 mb-0">שימוש ב-API</h2>
+        </div>
+        <div class="card-body text-end">
+            <h3 id="api-auth">אימות</h3>
+            <p>הוסף כותרת <code>X-API-Key</code> עם ערך <code>ADMIN_API_KEY</code>.</p>
+
+            <h3 id="api-buyers">הוספת קונים בכמות</h3>
+            <div class="bg-light p-3 rounded text-start" dir="ltr">
+                <code>POST /admin/buyers/bulk</code>
+            </div>
+
+            <h3 id="api-items">הוספת פריטים בכמות</h3>
+            <div class="bg-light p-3 rounded text-start" dir="ltr">
+                <code>POST /admin/items/bulk</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Example -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">דוגמת שימוש מלאה</div>
+        <div class="card-body text-start" dir="ltr">
+            <pre><code># Replace YOUR_ADMIN_API_KEY with the value from your .env file
+
+# Add Buyers with Hebrew Names
+curl -X POST http://Synagogue.urielmanzur.com/admin/buyers/bulk \
+     -H "Content-Type: application/json; charset=utf-8" \
+     -H "X-API-Key: YOUR_ADMIN_API_KEY" \
+     --data '{
+         "buyers": [
+           { "name": "משה כהן" },
+           { "name": "שרה לוי", "barcode_id": "B9901" },
+           { "name": "דוד מזרחי" },
+           { "name": "קונה קיים", "barcode_id": "B1001" },
+           { "barcode_id": "B9999" }
+         ]
+       }'
+
+# Add Items with Hebrew Names
+curl -X POST http://Synagogue.urielmanzur.com/admin/items/bulk \
+     -H "Content-Type: application/json; charset=utf-8" \
+     -H "X-API-Key: YOUR_ADMIN_API_KEY" \
+     --data '{
+         "items": [
+           { "name": "עלייה שלישית" },
+           { "name": "קידוש", "barcode_id": "I8801" },
+           { "name": "הגבהה", "is_unique": true },
+           { "name": "פריט קיים", "barcode_id": "I5001" },
+           { "is_unique": false }
+         ]
+       }'</code></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
