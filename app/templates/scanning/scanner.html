@@ -6,23 +6,15 @@
 {# --- Add some mobile-specific styles --- #}
 {% block head_extra %}
 <style>
-  /* Ensure video doesn't overflow its container */
-  #camera {
-    max-width: 100%;
-    height: auto; /* Adjust height automatically */
-    max-height: 40vh; /* Limit height on mobile */
-  }
-  /* Slightly larger tap targets for +/- buttons on mobile */
+  /* Styles from previous mobile-friendly update */
+  #camera { max-width: 100%; height: auto; max-height: 40vh; }
   @media (max-width: 576px) {
-    .input-group-sm .btn {
-      padding: .25rem .6rem; /* Increase padding slightly */
-      font-size: 1rem;      /* Make '+' a bit larger */
-    }
-    /* Ensure manual entry button is prominent */
-    #manual-add-btn {
-       padding-top: 0.5rem;
-       padding-bottom: 0.5rem;
-    }
+    .input-group-sm .btn { padding: .25rem .6rem; font-size: 1rem; }
+    #manual-add-btn { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  }
+  /* --- Style for Toast Container --- */
+  .toast-container {
+     z-index: 1090; /* Ensure it's above most other elements */
   }
 </style>
 {% endblock %}
@@ -30,49 +22,43 @@
 
 {# --- Content Block: Holds the main HTML structure --- #}
 {% block content %}
-<div class="container mt-3 mt-md-4"> {# Reduced top margin slightly on smallest screens #}
+{# --- ADD TOAST CONTAINER (Often placed near end of body or outside main flow) --- #}
+<div class="toast-container position-fixed top-0 end-0 p-3">
+  <!-- Toasts will be appended here -->
+</div>
+
+
+<div class="container mt-3 mt-md-4">
 
   <!-- Event header -->
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-    {# Make header text slightly smaller on mobile if needed #}
     <h2 class="me-3 h3">{{ event.event_name }} ({{ event.gregorian_date.strftime('%Y-%m-%d') }})</h2>
-
-    {# Button Group - allow wrapping #}
-    <div class="ms-auto d-flex flex-wrap gap-1"> {# Use gap for spacing, allows wrapping #}
-        <a href="{{ url_for('main.edit_event', event_id=event.id) }}"
-           class="btn btn-outline-secondary btn-sm">Edit Event</a>
-        {# --- Delete Event Form --- #}
+    <div class="ms-auto d-flex flex-wrap gap-1">
+       {# ... Header buttons ... #}
+        <a href="{{ url_for('main.edit_event', event_id=event.id) }}" class="btn btn-outline-secondary btn-sm">Edit Event</a>
         {% if delete_event_form %}
-        <form method="POST"
-              action="{{ url_for('main.delete_event', event_id=event.id) }}"
-              onsubmit="return confirm('Are you sure you want to delete this event and ALL its purchases? This cannot be undone.');"
-              class="d-inline">
+        <form method="POST" action="{{ url_for('main.delete_event', event_id=event.id) }}" onsubmit="return confirm('Are you sure you want to delete this event and ALL its purchases? This cannot be undone.');" class="d-inline">
           {{ delete_event_form.hidden_tag() }}
           <button type="submit" class="btn btn-outline-danger btn-sm">Delete Event</button>
         </form>
         {% endif %}
-         {# --- Finish Scanning Form --- #}
-         <form method="POST"
-              action="{{ url_for('scanning.finish_event') }}"
-              onsubmit="return confirm('Finish scanning for this event? Any pending item/price will be saved.');"
-              class="d-inline">
-                {# Use CSRF from one of the forms passed #}
+         <form method="POST" action="{{ url_for('scanning.finish_event') }}" onsubmit="return confirm('Finish scanning for this event? Any pending item/price will be saved.');" class="d-inline">
                 {% if delete_event_form %}{{ delete_event_form.hidden_tag() }}{% elif manual_form %}{{ manual_form.hidden_tag() }}{% endif %}
-                <button type="submit" class="btn btn-warning btn-sm">Finish</button> {# Shorten Text #}
+                <button type="submit" class="btn btn-warning btn-sm">Finish</button>
          </form>
     </div>
   </div>
   <hr>
 
-  <div class="row g-3"> {# Added gutter between columns #}
+  <div class="row g-3">
     <!-- Camera feed -->
-    <div class="col-12 col-md-6 mb-3 mb-md-0"> {# Adjusted bottom margin #}
-      <h5>Camera</h5> {# Use h5 for slightly smaller heading #}
-      <video id="camera" class="w-100 border bg-light rounded" style="display:none;" playsinline muted></video> {# Start hidden, added rounded corners #}
-      <p id="cam-error" class="text-danger mt-1 small"></p> {# Reduced margin #}
+    <div class="col-12 col-md-6 mb-3 mb-md-0">
+      <h5>Camera</h5>
+      <video id="camera" class="w-100 border bg-light rounded" style="display:none;" playsinline muted></video>
+      <p id="cam-error" class="text-danger mt-1 small"></p>
       <div class="mt-2">
-        <button id="start-camera" class="btn btn-primary btn-sm me-1">Start Cam</button> {# Shorten Text #}
-        <button id="stop-camera" class="btn btn-secondary btn-sm" style="display:none;">Stop Cam</button> {# Shorten Text #}
+        <button id="start-camera" class="btn btn-primary btn-sm me-1">Start Cam</button>
+        <button id="stop-camera" class="btn btn-secondary btn-sm" style="display:none;">Stop Cam</button>
       </div>
     </div>
 
@@ -80,11 +66,13 @@
     <div class="col-12 col-md-6">
       <h5>Status</h5>
       <div class="card">
-        <div class="card-body p-2"> {# Reduced padding #}
+        <div class="card-body p-2">
           <p class="mb-1"><strong>Buyer:</strong> <span id="current-buyer" class="fw-bold">None</span></p>
           <p class="mb-1"><strong>Item:</strong> <span id="current-item" class="fw-bold">None</span></p>
-          <p class="mb-1"><strong>Total:</strong> <span class="fw-bold">₪<span id="current-total">0.00</span></span></p> {# Shorten Text #}
-          <div id="status-msg" class="alert alert-info mt-2 p-1 small mb-1">Waiting…</div> {# Smaller padding/margins #}
+          <p class="mb-1"><strong>Total:</strong> <span class="fw-bold">₪<span id="current-total">0.00</span></span></p>
+          {# --- Remove the old alert box ---
+          <div id="status-msg" class="alert alert-info mt-2 p-1 small mb-1">Waiting…</div>
+          --- #}
         </div>
       </div>
        <div class="mt-2 text-center">
@@ -92,68 +80,25 @@
       </div>
     </div>
   </div>
-  <hr class="my-3"> {# Add separator #}
+  <hr class="my-3">
 
   <!-- Manual Entry -->
-  <div class="card mb-3">
-      <div class="card-header p-2"> {# Reduced padding #}
-          <h6>Manual Entry / Donation</h6> {# Use h6 #}
+  {# ... Manual Entry Form structure remains the same ... #}
+    <div class="card mb-3">
+      <div class="card-header p-2">
+          <h6>Manual Entry / Donation</h6>
       </div>
-      <div class="card-body p-2"> {# Reduced padding #}
+      <div class="card-body p-2">
           {% if manual_form %}
-          <form id="manual-entry-form"
-                method="POST"
-                action="{{ url_for('scanning.manual_entry') }}">
-            {{ manual_form.hidden_tag() }}
-            {# Use more granular columns for better stacking #}
+          <form id="manual-entry-form" method="POST" action="{{ url_for('scanning.manual_entry') }}">
+             {{ manual_form.hidden_tag() }}
             <div class="row g-2 align-items-end">
-
-              {# --- Buyer Group --- #}
-              <div class="col-12 col-sm-6 col-lg-4">
-                <label for="manual-buyer-id" class="form-label mb-1 small">Buyer</label>
-                <div class="input-group input-group-sm">
-                  {{ manual_form.buyer_id(class="form-select form-select-sm", id="manual-buyer-id") }} {# Smaller select #}
-                  <button id="add-buyer" type="button" title="Add New Buyer" class="btn btn-outline-secondary">+</button>
-                </div>
-                <div id="new-buyer-row" class="mt-1 border p-2 bg-light rounded" style="display:none;">
-                  <input type="text" id="new-buyer-name" class="form-control form-control-sm mb-1" placeholder="New Buyer Name">
-                  <div class="d-flex justify-content-end"> <button id="save-buyer" type="button" class="btn btn-sm btn-primary me-1">Save</button> <button id="cancel-buyer" type="button" class="btn btn-sm btn-secondary">Cancel</button> </div>
-                </div>
-              </div>
-
-              {# --- Item Group --- #}
-              <div class="col-12 col-sm-6 col-lg-4">
-                <label for="manual-item-id" class="form-label mb-1 small">Item</label>
-                 <div class="input-group input-group-sm">
-                    {{ manual_form.item_id(class="form-select form-select-sm", id="manual-item-id") }} {# Smaller select #}
-                    <button id="add-item" type="button" title="Add New Item" class="btn btn-outline-secondary">+</button>
-                 </div>
-                <div id="new-item-row" class="mt-1 border p-2 bg-light rounded" style="display:none;">
-                  <input type="text" id="new-item-name" class="form-control form-control-sm mb-1" placeholder="New Item Name">
-                  <div class="d-flex justify-content-end"> <button id="save-item" type="button" class="btn btn-sm btn-primary me-1">Save</button> <button id="cancel-item" type="button" class="btn btn-sm btn-secondary">Cancel</button> </div>
-                </div>
-              </div>
-
-              {# --- Price / Qty Group (Side-by-side on small screens) --- #}
-              <div class="col-6 col-sm-4 col-lg-2">
-                <label for="id_total_price" class="form-label mb-1 small">Price (₪)</label>
-                {{ manual_form.total_price(class="form-control form-control-sm", id="id_total_price", placeholder="₪0.00") }}
-              </div>
-              <div class="col-6 col-sm-2 col-lg-2"> {# Adjusted columns #}
-                <label for="id_quantity" class="form-label mb-1 small">Qty</label>
-                {{ manual_form.quantity(class="form-control form-control-sm", id="id_quantity", placeholder="1") }}
-              </div>
-
-              {# --- Notes Group --- #}
-              <div class="col-12 col-sm-6 col-lg-4">
-                <label for="id_manual_entry_notes" class="form-label mb-1 small">Notes</label>
-                {{ manual_form.manual_entry_notes(class="form-control form-control-sm", id="id_manual_entry_notes", rows="1", placeholder="Optional notes") }}
-              </div>
-
-              {# --- Add Button Group --- #}
-              <div class="col-12 col-sm-6 col-lg-4 d-grid"> {# Use d-grid for full width button on smallest #}
-                <button id="manual-add-btn" type="button" class="btn btn-success btn-sm">Add Manual Entry</button>
-              </div>
+                <div class="col-12 col-sm-6 col-lg-4"> <label for="manual-buyer-id" class="form-label mb-1 small">Buyer</label> <div class="input-group input-group-sm"> {{ manual_form.buyer_id(class="form-select form-select-sm", id="manual-buyer-id") }} <button id="add-buyer" type="button" title="Add New Buyer" class="btn btn-outline-secondary">+</button> </div> <div id="new-buyer-row" class="mt-1 border p-2 bg-light rounded" style="display:none;"> <input type="text" id="new-buyer-name" class="form-control form-control-sm mb-1" placeholder="New Buyer Name"> <div class="d-flex justify-content-end"> <button id="save-buyer" type="button" class="btn btn-sm btn-primary me-1">Save</button> <button id="cancel-buyer" type="button" class="btn btn-sm btn-secondary">Cancel</button> </div> </div> </div>
+                <div class="col-12 col-sm-6 col-lg-4"> <label for="manual-item-id" class="form-label mb-1 small">Item</label> <div class="input-group input-group-sm"> {{ manual_form.item_id(class="form-select form-select-sm", id="manual-item-id") }} <button id="add-item" type="button" title="Add New Item" class="btn btn-outline-secondary">+</button> </div> <div id="new-item-row" class="mt-1 border p-2 bg-light rounded" style="display:none;"> <input type="text" id="new-item-name" class="form-control form-control-sm mb-1" placeholder="New Item Name"> <div class="d-flex justify-content-end"> <button id="save-item" type="button" class="btn btn-sm btn-primary me-1">Save</button> <button id="cancel-item" type="button" class="btn btn-sm btn-secondary">Cancel</button> </div> </div> </div>
+                <div class="col-6 col-sm-4 col-lg-2"> <label for="id_total_price" class="form-label mb-1 small">Price (₪)</label> {{ manual_form.total_price(class="form-control form-control-sm", id="id_total_price", placeholder="₪0.00") }} </div>
+                <div class="col-6 col-sm-2 col-lg-2"> <label for="id_quantity" class="form-label mb-1 small">Qty</label> {{ manual_form.quantity(class="form-control form-control-sm", id="id_quantity", placeholder="1") }} </div>
+                <div class="col-12 col-sm-6 col-lg-4"> <label for="id_manual_entry_notes" class="form-label mb-1 small">Notes</label> {{ manual_form.manual_entry_notes(class="form-control form-control-sm", id="id_manual_entry_notes", rows="1", placeholder="Optional notes") }} </div>
+                <div class="col-12 col-sm-6 col-lg-4 d-grid"> <button id="manual-add-btn" type="button" class="btn btn-success btn-sm">Add Manual Entry</button> </div>
             </div>
           </form>
           {% else %}
@@ -164,24 +109,17 @@
 
   <!-- Current Purchases -->
   <h5>Purchases</h5>
-  {# Make table scrollable on small screens #}
   <div class="table-responsive mb-4">
-    <table class="table table-striped table-sm table-hover"> {# Added hover effect #}
+    {# ... Purchases table structure remains the same ... #}
+        <table class="table table-striped table-sm table-hover">
       <thead>
         <tr>
-          <th scope="col">Buyer</th>
-          <th scope="col">Item</th>
-          <th scope="col" class="text-end">Price</th>
-          <th scope="col" class="text-center">Qty</th>
-          {# Hide Notes on extra small screens #}
-          <th scope="col" class="d-none d-sm-table-cell">Notes</th>
-          {# Hide Time on small screens and below #}
-          <th scope="col" class="d-none d-md-table-cell">Time</th>
-          <th scope="col" class="text-center">Actions</th>
+          <th scope="col">Buyer</th> <th scope="col">Item</th> <th scope="col" class="text-end">Price</th> <th scope="col" class="text-center">Qty</th>
+          <th scope="col" class="d-none d-sm-table-cell">Notes</th> <th scope="col" class="d-none d-md-table-cell">Time</th> <th scope="col" class="text-center">Actions</th>
         </tr>
       </thead>
-      <tbody id="purchase-table-body"> {# Ensure this ID matches JS #}
-          <tr><td colspan="7" class="text-center text-muted">Loading purchases...</td></tr> {# Adjust colspan based on visible columns #}
+      <tbody id="purchase-table-body">
+          <tr><td colspan="7" class="text-center text-muted">Loading purchases...</td></tr>
       </tbody>
     </table>
   </div>
@@ -192,13 +130,11 @@
 {# --- Scripts Block: Inherits from base.html --- #}
 {% block scripts %}
 
-{# Load ZXing library FIRST (Local or CDN) #}
-{# <script src="{{ url_for('static', filename='js/zxing.library.js') }}"></script> #}
+{# Load ZXing library FIRST #}
 <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
 
-<!-- Your custom scanner script (No changes needed in the JS for these layout adjustments) -->
+<!-- Your custom scanner script -->
 <script>
-  // *** Wrap ALL custom logic in DOMContentLoaded ***
   window.addEventListener('DOMContentLoaded', async () => {
       console.log("DOMContentLoaded event fired. Initializing scanner script...");
 
@@ -207,25 +143,27 @@
       const startCamBtn= document.getElementById('start-camera');
       const stopCamBtn = document.getElementById('stop-camera');
       const camErrorElem = document.getElementById('cam-error');
-      const purchaseTableBody = document.getElementById('purchase-table-body'); // *** Critical element ***
+      const purchaseTableBody = document.getElementById('purchase-table-body');
       const buyerDisplay = document.getElementById('current-buyer');
       const itemDisplay = document.getElementById('current-item');
       const totalDisplay = document.getElementById('current-total');
-      const statusMsgElem = document.getElementById('status-msg');
+      // const statusMsgElem = document.getElementById('status-msg'); // Old alert box - REMOVED
       const clearStateBtn = document.getElementById('clear-state-btn');
+      const toastContainerElem = document.querySelector('.toast-container'); // Get toast container
+
       // Check if elements were found
-      if (!videoElem || !startCamBtn || !stopCamBtn || !camErrorElem || !purchaseTableBody || !buyerDisplay || !itemDisplay || !totalDisplay || !statusMsgElem || !clearStateBtn) {
-          console.error("One or more essential DOM elements could not be found! Check IDs: camera, start-camera, stop-camera, cam-error, purchase-table-body, current-buyer, current-item, current-total, status-msg, clear-state-btn");
+      if (!videoElem || !startCamBtn || !stopCamBtn || !camErrorElem || !purchaseTableBody || !buyerDisplay || !itemDisplay || !totalDisplay || !clearStateBtn || !toastContainerElem) {
+          console.error("One or more essential DOM elements could not be found!");
           if(camErrorElem) camErrorElem.textContent = "Page structure error: Essential elements missing.";
-          return; // Stop script execution if essential elements are missing
+          return;
       }
-      console.log("DOM Elements selected successfully.");
+      // console.log("DOM Elements selected successfully.");
 
       // --- State & Config ---
       let codeReader;
       try {
           codeReader = new ZXing.BrowserMultiFormatReader();
-          console.log("ZXing codeReader initialized successfully.");
+          // console.log("ZXing codeReader initialized successfully.");
       } catch (e) {
           console.error("Error initializing ZXing Reader:", e);
           if(camErrorElem) camErrorElem.textContent = "Error initializing barcode scanner library.";
@@ -237,7 +175,6 @@
       let lastBarcode = null;
       let lastBarcodeTime = 0;
       const debounceTime = 1000;
-      // console.log("State variables declared.");
 
        // --- URLs ---
       const PROCESS_SCAN_URL = '{{ url_for("scanning.process_scan") }}';
@@ -246,72 +183,76 @@
       const ADD_BUYER_URL = '{{ url_for("scanning.add_buyer") }}';
       const ADD_ITEM_URL = '{{ url_for("scanning.add_item") }}';
       const MANUAL_ENTRY_URL = '{{ url_for("scanning.manual_entry") }}';
-      // console.log("URLs set:", { PROCESS_SCAN_URL, LIST_PURCHASES_URL, DELETE_PURCHASE_URL_BASE, ADD_BUYER_URL, ADD_ITEM_URL, MANUAL_ENTRY_URL });
 
+      // --- NEW: Toast Function ---
+      function showToast(message, type = 'info') {
+          if (!toastContainerElem) return;
 
-      // --- Camera Functions ---
-      function startCamera() {
-          if (!codeReader) { console.error("codeReader not initialized."); return; }
-          camErrorElem.textContent = '';
-          codeReader.listVideoInputDevices()
-            .then(videoInputDevices => {
-              if (videoInputDevices.length > 0) {
-                  const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment'));
-                  selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId;
-                  console.log(`Using video device: ${selectedDeviceId}`);
-                  videoElem.style.display = 'block';
-                  codeReader.decodeFromVideoDevice(selectedDeviceId, videoElem, handleDecodeResult)
-                    .then(controls => {
-                        console.log("Camera started.");
-                        startCamBtn.style.display = 'none'; stopCamBtn.style.display = 'inline-block'; isCameraRunning = true;
-                    })
-                    .catch(err => handleCameraError(err));
-              } else { handleCameraError(new Error("No video input devices found.")); }
-            })
-            .catch(err => handleCameraError(err));
-      }
+          let bgClass = 'text-bg-secondary'; // Default greyish
+          if (type === 'success') bgClass = 'text-bg-success';
+          else if (type === 'error' || type === 'danger') bgClass = 'text-bg-danger';
+          else if (type === 'warning') bgClass = 'text-bg-warning';
+          else if (type === 'info') bgClass = 'text-bg-info';
 
-      function stopCamera() {
-          if (!codeReader) return;
-          codeReader.reset();
-          if (videoElem.srcObject) { // Check if srcObject is set before stopping tracks
-             videoElem.srcObject.getTracks().forEach(track => track.stop());
+          const toastId = `toast-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+          // Simple toast structure
+          const toastHTML = `
+              <div id="${toastId}" class="toast align-items-center ${bgClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                  <div class="d-flex">
+                      <div class="toast-body">
+                          ${message}
+                      </div>
+                      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                  </div>
+              </div>
+          `;
+
+          // Append & Initialize & Show
+          toastContainerElem.insertAdjacentHTML('beforeend', toastHTML);
+          const toastElement = document.getElementById(toastId);
+          if (toastElement) {
+              const toast = new bootstrap.Toast(toastElement, {
+                  delay: 3500 // Show for 3.5 seconds
+              });
+              toast.show();
+
+              // Cleanup after hiding
+              toastElement.addEventListener('hidden.bs.toast', () => {
+                  toastElement.remove();
+              });
           }
-          videoElem.style.display = 'none'; videoElem.srcObject = null;
-          startCamBtn.style.display = 'inline-block'; stopCamBtn.style.display = 'none';
-          isCameraRunning = false; console.log("Camera stopped.");
       }
 
-      function handleCameraError(err) {
-          console.error("Camera Error:", err);
-          if(camErrorElem) camErrorElem.textContent = `Camera error: ${err.message}. Please grant permission or check device.`;
-          stopCamera();
-      }
+
+      // --- Camera Functions (no changes needed) ---
+      function startCamera() { /* ... */ }
+      function stopCamera() { /* ... */ }
+      function handleCameraError(err) { /* ... */ }
+        // Camera functions remain the same as previous versions
+      function startCamera() { if (!codeReader) { console.error("codeReader not initialized."); return; } camErrorElem.textContent = ''; codeReader.listVideoInputDevices() .then(videoInputDevices => { if (videoInputDevices.length > 0) { const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment')); selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId; console.log(`Using video device: ${selectedDeviceId}`); videoElem.style.display = 'block'; codeReader.decodeFromVideoDevice(selectedDeviceId, videoElem, handleDecodeResult) .then(controls => { console.log("Camera started."); startCamBtn.style.display = 'none'; stopCamBtn.style.display = 'inline-block'; isCameraRunning = true; }) .catch(err => handleCameraError(err)); } else { handleCameraError(new Error("No video input devices found.")); } }) .catch(err => handleCameraError(err)); }
+      function stopCamera() { if (!codeReader) return; codeReader.reset(); if (videoElem.srcObject) { videoElem.srcObject.getTracks().forEach(track => track.stop()); } videoElem.style.display = 'none'; videoElem.srcObject = null; startCamBtn.style.display = 'inline-block'; stopCamBtn.style.display = 'none'; isCameraRunning = false; console.log("Camera stopped."); }
+      function handleCameraError(err) { console.error("Camera Error:", err); if(camErrorElem) camErrorElem.textContent = `Camera error: ${err.message}. Please grant permission or check device.`; stopCamera(); }
+
 
       // --- Barcode Handling ---
-      function handleDecodeResult(result, err) {
-          if (result) {
-              const code = result.getText(); const now = Date.now();
-              if (code === lastBarcode && (now - lastBarcodeTime < debounceTime)) {
-                  return;
-              }
-              lastBarcode = code; lastBarcodeTime = now;
-              console.log("Barcode Detected:", code);
-              handleBarcode(code);
-          }
-          if (err && !(err instanceof ZXing.NotFoundException)) {
-             console.warn("Decoding Warning/Error:", err);
-          }
-      }
+      function handleDecodeResult(result, err) { /* ... no changes needed ... */ }
+       // Barcode handling remains the same
+       function handleDecodeResult(result, err) { if (result) { const code = result.getText(); const now = Date.now(); if (code === lastBarcode && (now - lastBarcodeTime < debounceTime)) { return; } lastBarcode = code; lastBarcodeTime = now; console.log("Barcode Detected:", code); handleBarcode(code); } if (err && !(err instanceof ZXing.NotFoundException)) { console.warn("Decoding Warning/Error:", err); } }
 
       async function handleBarcode(code) {
-          showStatus('Processing scan...', 'info', true);
+          // --- Use Toast Instead of Alert Box ---
+          // showStatus('Processing scan...', 'info', true); // OLD
+          showToast('Processing scan...', 'info'); // NEW
+
           try {
               const res = await fetch(PROCESS_SCAN_URL, { method: 'POST', headers: {'Content-Type':'application/json', 'Accept': 'application/json'}, credentials:'same-origin', body: JSON.stringify({barcode: code}) });
               if (!res.ok) { let errorMsg = `Server status ${res.status}`; try { const d = await res.json(); errorMsg = d.message || errorMsg; } catch (e) {} throw new Error(errorMsg); }
               const data = await res.json();
-              // console.log("Server response from process_scan:", data);
-              updateStateDisplay(data.state); showStatus(data.message, data.status);
+              updateStateDisplay(data.state);
+              // --- Use Toast for Server Message ---
+              showToast(data.message, data.status); // NEW (uses status like 'success', 'error')
+
               if(data.purchases) {
                   renderPurchases(data.purchases);
               } else {
@@ -319,150 +260,83 @@
                   await fetchPurchases();
               }
           } catch (error) {
-              console.error("Error processing scan:", error); showStatus(`Error: ${error.message}`, 'error'); updateStateDisplay({});
+              console.error("Error processing scan:", error);
+              // --- Use Toast for Error Message ---
+              showToast(`Scan Error: ${error.message}`, 'error'); // NEW
+              updateStateDisplay({});
           }
       }
 
       // --- UI Update Functions ---
-      function updateStateDisplay(state = {}) {
-          if (buyerDisplay) buyerDisplay.textContent = state.buyer_name || 'None';
-          if (itemDisplay) itemDisplay.textContent  = state.item_name  || 'None';
-          if (totalDisplay) totalDisplay.textContent = (state.accumulated_price || 0.0).toFixed(2);
-      }
+      // Keeps updating the static Buyer/Item/Price display
+      function updateStateDisplay(state = {}) { /* ... no changes needed ... */ }
+       function updateStateDisplay(state = {}) { if (buyerDisplay) buyerDisplay.textContent = state.buyer_name || 'None'; if (itemDisplay) itemDisplay.textContent = state.item_name || 'None'; if (totalDisplay) totalDisplay.textContent = (state.accumulated_price || 0.0).toFixed(2); }
+
+
+      // --- THIS FUNCTION IS NO LONGER NEEDED for alerts, toasts handle messages ---
+      /*
       function showStatus(message, type = 'info', isLoading = false) {
-          if (!statusMsgElem) return;
-          statusMsgElem.textContent = message; let alertClass = 'alert-info';
-          if (type === 'success') alertClass = 'alert-success'; else if (type === 'error' || type === 'danger') alertClass = 'alert-danger'; else if (type === 'warning') alertClass = 'alert-warning';
-          statusMsgElem.className = `alert ${alertClass} mt-2 p-1 small mb-1`; // Match smaller style
+          // ... old implementation updating #status-msg ...
       }
-      function clearCurrentScanState() { handleBarcode('BUYER:__CLEAR__'); showStatus('State cleared. Scan buyer.', 'info'); }
+      */
 
-      // --- LOAD & RENDER PURCHASES ---
-      async function fetchPurchases() {
-        // console.log('Fetching purchases from:', LIST_PURCHASES_URL);
-        showTableMessage("Loading purchases...");
-
-        try {
-            const res = await fetch(LIST_PURCHASES_URL, { method: 'GET', headers: {'Accept': 'application/json'}, credentials: 'same-origin' });
-            // console.log('Fetch response status:', res.status);
-
-            if (!res.ok) {
-                let errorText = `Failed to fetch purchases (Status: ${res.status} ${res.statusText})`;
-                try { const text = await res.text(); console.error("Server response (non-OK):", text); errorText += `: ${text.substring(0, 100)}...`; } catch (e) { /* Ignore */ }
-                throw new Error(errorText);
-            }
-            const contentType = res.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) { throw new Error(`Expected JSON response for purchases, but got ${contentType}`); }
-
-            let data;
-            try { data = await res.json(); /* console.log("Parsed JSON data for purchases:", data); */ }
-            catch (parseError) {
-                console.error("JSON Parsing Error:", parseError); let rawText = "(Could not read raw text)";
-                try { const resClone = res.clone(); rawText = await resClone.text(); console.error("Raw response text:", rawText); } catch(e) {}
-                throw new Error(`Failed to parse JSON purchase response. ${parseError.message}. Raw text: ${rawText.substring(0,100)}...`);
-            }
-
-            if (!data || typeof data !== 'object' || !Array.isArray(data.purchases)) { throw new Error('Invalid data structure received (expected {"purchases": [...]})'); }
-
-            renderPurchases(data.purchases);
-
-        } catch (error) {
-            console.error('Error in fetchPurchases:', error); showTableMessage(`Error loading purchases: ${error.message}`, true);
-        }
+      function clearCurrentScanState() {
+          handleBarcode('BUYER:__CLEAR__');
+          // --- Use Toast Instead of Alert Box ---
+          showToast('State cleared. Scan buyer.', 'info'); // NEW
       }
 
-      function renderPurchases(purchases) {
-        // console.log('Rendering purchases:', purchases);
-        if (!purchaseTableBody) { console.error("Fatal Error: purchaseTableBody element not found!"); return; }
-        purchaseTableBody.innerHTML = '';
-        if (!Array.isArray(purchases) || purchases.length === 0) {
-            showTableMessage('No purchases recorded yet for this event.');
-            return;
-        }
+      // --- LOAD & RENDER PURCHASES (no changes needed) ---
+      async function fetchPurchases() { /* ... */ }
+      function renderPurchases(purchases) { /* ... */ }
+      function showTableMessage(message, isError = false) { /* ... */ }
+       // Purchase fetch/render/message functions remain the same
+       async function fetchPurchases() { showTableMessage("Loading purchases..."); try { const res = await fetch(LIST_PURCHASES_URL, { method: 'GET', headers: {'Accept': 'application/json'}, credentials: 'same-origin' }); if (!res.ok) { let errorText = `Failed to fetch purchases (Status: ${res.status} ${res.statusText})`; try { const text = await res.text(); console.error("Server response (non-OK):", text); errorText += `: ${text.substring(0, 100)}...`; } catch (e) {} throw new Error(errorText); } const contentType = res.headers.get("content-type"); if (!contentType || !contentType.includes("application/json")) { throw new Error(`Expected JSON response for purchases, but got ${contentType}`); } let data; try { data = await res.json(); } catch (parseError) { console.error("JSON Parsing Error:", parseError); let rawText = "(Could not read raw text)"; try { const resClone = res.clone(); rawText = await resClone.text(); console.error("Raw response text:", rawText); } catch(e) {} throw new Error(`Failed to parse JSON purchase response. ${parseError.message}. Raw text: ${rawText.substring(0,100)}...`); } if (!data || typeof data !== 'object' || !Array.isArray(data.purchases)) { throw new Error('Invalid data structure received (expected {"purchases": [...]})'); } renderPurchases(data.purchases); } catch (error) { console.error('Error in fetchPurchases:', error); showTableMessage(`Error loading purchases: ${error.message}`, true); } }
+       function renderPurchases(purchases) { if (!purchaseTableBody) { console.error("Fatal Error: purchaseTableBody element not found!"); return; } purchaseTableBody.innerHTML = ''; if (!Array.isArray(purchases) || purchases.length === 0) { showTableMessage('No purchases recorded yet for this event.'); return; } purchases.forEach(p => { const tr = document.createElement('tr'); const buyerName = p.buyer || 'Unknown'; const itemName = p.item || 'Unknown'; const priceStr = (typeof p.price === 'number') ? `₪${p.price.toFixed(2)}` : 'N/A'; const quantity = p.quantity || 1; const notesStr = p.notes || ''; const timeStr = p.time || 'N/A'; const manualBadge = p.manual ? '<span class="badge bg-secondary ms-1">Manual</span>' : ''; tr.innerHTML = ` <td>${buyerName}</td> <td>${itemName} ${manualBadge}</td> <td class="text-end">${priceStr}</td> <td class="text-center">${quantity}</td> <td class="small d-none d-sm-table-cell">${notesStr}</td> <td class="small d-none d-md-table-cell">${timeStr}</td> <td class="text-center"> <button class="btn btn-sm btn-outline-danger delete-purchase-btn" data-purchase-id="${p.id}" title="Delete Purchase">×</button> </td> `; purchaseTableBody.appendChild(tr); }); addDeleteButtonListeners(); }
+       function showTableMessage(message, isError = false) { if (!purchaseTableBody) return; const className = isError ? 'text-danger' : 'text-muted'; purchaseTableBody.innerHTML = `<tr><td colspan="7" class="text-center ${className}">${message}</td></tr>`; }
 
-        purchases.forEach(p => {
-            const tr = document.createElement('tr');
-            const buyerName = p.buyer || 'Unknown';
-            const itemName = p.item || 'Unknown';
-            const priceStr = (typeof p.price === 'number') ? `₪${p.price.toFixed(2)}` : 'N/A';
-            const quantity = p.quantity || 1;
-            const notesStr = p.notes || '';
-            const timeStr = p.time || 'N/A';
-            const manualBadge = p.manual ? '<span class="badge bg-secondary ms-1">Manual</span>' : '';
-
-            // Add responsive classes to cells matching header classes
-            tr.innerHTML = `
-                <td>${buyerName}</td>
-                <td>${itemName} ${manualBadge}</td>
-                <td class="text-end">${priceStr}</td>
-                <td class="text-center">${quantity}</td>
-                <td class="small d-none d-sm-table-cell">${notesStr}</td>
-                <td class="small d-none d-md-table-cell">${timeStr}</td>
-                <td class="text-center">
-                    <button class="btn btn-sm btn-outline-danger delete-purchase-btn" data-purchase-id="${p.id}" title="Delete Purchase">×</button>
-                </td>
-            `;
-            purchaseTableBody.appendChild(tr);
-        });
-        addDeleteButtonListeners();
-      }
-
-      function showTableMessage(message, isError = false) {
-        if (!purchaseTableBody) return;
-        const className = isError ? 'text-danger' : 'text-muted';
-        // Adjust colspan based on widest view (7 columns)
-        purchaseTableBody.innerHTML = `<tr><td colspan="7" class="text-center ${className}">${message}</td></tr>`;
-      }
 
       // --- DELETE PURCHASE ---
-      function addDeleteButtonListeners() {
-        const deleteButtons = purchaseTableBody.querySelectorAll('.delete-purchase-btn');
-        deleteButtons.forEach(button => {
-            button.replaceWith(button.cloneNode(true));
-        });
-        purchaseTableBody.querySelectorAll('.delete-purchase-btn').forEach(button => {
-             button.addEventListener('click', async (event) => {
-                const purchaseId = event.currentTarget.getAttribute('data-purchase-id');
-                if (purchaseId && confirm(`Are you sure you want to delete purchase ID ${purchaseId}?`)) {
-                    await deletePurchase(purchaseId);
-                 }
-            });
-        });
-      }
+      function addDeleteButtonListeners() { /* ... no changes needed ... */ }
       async function deletePurchase(purchaseId) {
-        // console.log('Attempting to delete purchase ID:', purchaseId);
-        showStatus('Deleting purchase...', 'info');
-        try {
-            const deleteUrl = `${DELETE_PURCHASE_URL_BASE}/${purchaseId}`;
-            const res = await fetch(deleteUrl, { method: 'DELETE', headers: {'Accept': 'application/json'}, credentials: 'same-origin' });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                // console.log('Delete successful:', purchaseId);
-                showStatus('Purchase deleted.', 'success');
-                await fetchPurchases();
-            } else {
-                console.error('Delete failed:', purchaseId, res.status, data);
-                showStatus(`Failed to delete. ${data.message || `Server status ${res.status}`}`, 'error');
-            }
-        } catch (error) { console.error('Error deleting purchase:', error); showStatus(`Error deleting: ${error.message}`, 'error'); }
+          // --- Use Toast ---
+          showToast('Deleting purchase...', 'info'); // NEW
+          try {
+              const deleteUrl = `${DELETE_PURCHASE_URL_BASE}/${purchaseId}`;
+              const res = await fetch(deleteUrl, { method: 'DELETE', headers: {'Accept': 'application/json'}, credentials: 'same-origin' });
+              const data = await res.json();
+              if (res.ok && data.success) {
+                  showToast('Purchase deleted.', 'success'); // NEW
+                  await fetchPurchases();
+              } else {
+                  console.error('Delete failed:', purchaseId, res.status, data);
+                  showToast(`Failed to delete. ${data.message || `Server status ${res.status}`}`, 'error'); // NEW
+              }
+          } catch (error) {
+               console.error('Error deleting purchase:', error);
+               showToast(`Error deleting: ${error.message}`, 'error'); // NEW
+           }
       }
+       // Delete button listeners remain the same
+       function addDeleteButtonListeners() { const deleteButtons = purchaseTableBody.querySelectorAll('.delete-purchase-btn'); deleteButtons.forEach(button => { button.replaceWith(button.cloneNode(true)); }); purchaseTableBody.querySelectorAll('.delete-purchase-btn').forEach(button => { button.addEventListener('click', async (event) => { const purchaseId = event.currentTarget.getAttribute('data-purchase-id'); if (purchaseId && confirm(`Are you sure you want to delete purchase ID ${purchaseId}?`)) { await deletePurchase(purchaseId); } }); }); }
 
       // --- MANUAL ENTRY ---
       const manualAddBtn = document.getElementById('manual-add-btn');
       if (manualAddBtn) {
           manualAddBtn.addEventListener('click', async () => {
             const form = document.getElementById('manual-entry-form'); const fd = new FormData(form);
-            if (!fd.get('buyer_id')) { alert('Please select a Buyer.'); return; } if (!fd.get('item_id')) { alert('Please select an Item.'); return; }
+            if (!fd.get('buyer_id')) { showToast('Please select a Buyer.', 'warning'); return; } // Use Toast
+            if (!fd.get('item_id')) { showToast('Please select an Item.', 'warning'); return; } // Use Toast
             if (!fd.get('total_price').trim()) fd.set('total_price', '0');
             if (!fd.get('quantity').trim()) fd.set('quantity', '1');
 
-            showStatus('Adding manual entry...', 'info');
+            showToast('Adding manual entry...', 'info'); // Use Toast
             try {
                 const res = await fetch(MANUAL_ENTRY_URL, { method:'POST', headers: {'Accept': 'application/json'}, credentials:'same-origin', body:fd });
                 const data = await res.json();
 
                 if (res.ok && data.purchases) {
-                    showStatus('Manual entry added.', 'success');
+                    showToast('Manual entry added.', 'success'); // Use Toast
                     const bVal = fd.get('buyer_id'); const iVal = fd.get('item_id');
                     form.reset();
                     form.querySelector('select[name="buyer_id"]').value = bVal; form.querySelector('select[name="item_id"]').value = iVal;
@@ -472,57 +346,57 @@
                     if (data && data.errors) { eMsg = 'Validation errors: ' + JSON.stringify(data.errors); }
                     else if (data && data.message) { eMsg = data.message; }
                     else { eMsg = `Server error: ${res.status}`; }
-                    console.error('Manual entry fail:', data); showStatus(eMsg, 'error'); alert(eMsg);
+                    console.error('Manual entry fail:', data);
+                    showToast(eMsg, 'error'); // Use Toast
+                    // alert(eMsg); // Maybe remove alert now
                 }
-            } catch(error) { console.error('Manual entry submit error:', error); showStatus(`Network or script error: ${error.message}`, 'error'); alert(`Error: ${error.message}`); }
+            } catch(error) {
+                 console.error('Manual entry submit error:', error);
+                 showToast(`Network or script error: ${error.message}`, 'error'); // Use Toast
+                 // alert(`Error: ${error.message}`); // Maybe remove alert
+            }
           });
       } else { console.warn("Manual add button ('manual-add-btn') not found."); }
 
       // --- INLINE ADD BUYER/ITEM ---
-      if (document.getElementById('manual-buyer-id')) { setupInlineAdd('buyer', ADD_BUYER_URL, 'New Buyer Name'); } else { console.warn("Inline Add Buyer elements not found."); }
-      if (document.getElementById('manual-item-id')) { setupInlineAdd('item', ADD_ITEM_URL, 'New Item Name'); } else { console.warn("Inline Add Item elements not found."); }
+       if (document.getElementById('manual-buyer-id')) { setupInlineAdd('buyer', ADD_BUYER_URL, 'New Buyer Name'); } else { console.warn("Inline Add Buyer elements not found."); }
+       if (document.getElementById('manual-item-id')) { setupInlineAdd('item', ADD_ITEM_URL, 'New Item Name'); } else { console.warn("Inline Add Item elements not found."); }
       function setupInlineAdd(type, addUrl, placeholder) {
-          const selectElement = document.getElementById(`manual-${type}-id`); const addBtn = document.getElementById(`add-${type}`); const addForm = document.getElementById(`new-${type}-row`); const nameInput = document.getElementById(`new-${type}-name`); const saveBtn = document.getElementById(`save-${type}`); const cancelBtn = document.getElementById(`cancel-${type}`);
-          if (!selectElement || !addBtn || !addForm || !nameInput || !saveBtn || !cancelBtn) { console.error(`Missing elements for inline add '${type}'. Check IDs.`); return; }
-          const inputGroup = selectElement.closest('.input-group'); if (!inputGroup) { console.error(`Could not find .input-group parent for ${type} select.`); return; }
-          addBtn.addEventListener('click', () => { addForm.style.display = 'block'; inputGroup.style.display = 'none'; nameInput.value = ''; nameInput.placeholder = placeholder; nameInput.focus(); });
-          cancelBtn.addEventListener('click', () => { addForm.style.display = 'none'; inputGroup.style.display = 'flex'; });
-          saveBtn.addEventListener('click', async () => {
-              const name = nameInput.value.trim(); if (!name) { alert(`Please enter the ${placeholder}.`); nameInput.focus(); return; }
-              saveBtn.disabled = true; cancelBtn.disabled = true; saveBtn.textContent = "Saving...";
-              try {
-                  const res = await fetch(addUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json', 'Accept': 'application/json'}, body: JSON.stringify({name: name}) }); const data = await res.json();
-                  if (res.ok && data.id) {
-                     selectElement.add(new Option(data.name, data.id, true, true));
-                     showStatus(`Added ${type}: ${data.name}`, 'success');
-                     cancelBtn.click();
-                  } else { alert(`Error adding ${type}: ${data.error || `Server status ${res.status}`}`); }
-              } catch (error) { alert(`Network error adding ${type}. Check console.`); console.error(`Error adding ${type}:`, error);
-              } finally { saveBtn.disabled = false; cancelBtn.disabled = false; saveBtn.textContent = "Save"; }
-          });
-      }
+           const selectElement = document.getElementById(`manual-${type}-id`); const addBtn = document.getElementById(`add-${type}`); const addForm = document.getElementById(`new-${type}-row`); const nameInput = document.getElementById(`new-${type}-name`); const saveBtn = document.getElementById(`save-${type}`); const cancelBtn = document.getElementById(`cancel-${type}`);
+           if (!selectElement || !addBtn || !addForm || !nameInput || !saveBtn || !cancelBtn) { console.error(`Missing elements for inline add '${type}'. Check IDs.`); return; }
+           const inputGroup = selectElement.closest('.input-group'); if (!inputGroup) { console.error(`Could not find .input-group parent for ${type} select.`); return; }
+           addBtn.addEventListener('click', () => { addForm.style.display = 'block'; inputGroup.style.display = 'none'; nameInput.value = ''; nameInput.placeholder = placeholder; nameInput.focus(); });
+           cancelBtn.addEventListener('click', () => { addForm.style.display = 'none'; inputGroup.style.display = 'flex'; });
+           saveBtn.addEventListener('click', async () => {
+               const name = nameInput.value.trim(); if (!name) { showToast(`Please enter the ${placeholder}.`, 'warning'); nameInput.focus(); return; } // Use Toast
+               saveBtn.disabled = true; cancelBtn.disabled = true; saveBtn.textContent = "Saving...";
+               try {
+                   const res = await fetch(addUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json', 'Accept': 'application/json'}, body: JSON.stringify({name: name}) }); const data = await res.json();
+                   if (res.ok && data.id) {
+                      selectElement.add(new Option(data.name, data.id, true, true));
+                      showToast(`Added ${type}: ${data.name}`, 'success'); // Use Toast
+                      cancelBtn.click();
+                   } else { showToast(`Error adding ${type}: ${data.error || `Server status ${res.status}`}`, 'error'); } // Use Toast
+               } catch (error) { showToast(`Network error adding ${type}. Check console.`, 'error'); console.error(`Error adding ${type}:`, error); // Use Toast
+               } finally { saveBtn.disabled = false; cancelBtn.disabled = false; saveBtn.textContent = "Save"; }
+           });
+       }
 
       // --- Attach Core Event Listeners ---
       if(startCamBtn) startCamBtn.addEventListener('click', startCamera); else console.warn("Start camera button not found.");
       if(stopCamBtn) stopCamBtn.addEventListener('click', stopCamera); else console.warn("Stop camera button not found.");
       if(clearStateBtn) clearStateBtn.addEventListener('click', clearCurrentScanState); else console.warn("Clear state button not found.");
-      // console.log("Core event listeners attached.");
 
       // --- Initial Load ---
-      console.log("Attempting initial purchase fetch...");
       await fetchPurchases();
-      console.log("Initial fetchPurchases call finished.");
+      showToast("Scanning page ready.", "success"); // Initial ready toast
 
   }); // End of DOMContentLoaded listener
 
 
   window.addEventListener('beforeunload', () => {
-       if (typeof stopCamera === "function") {
-            try { stopCamera(); } catch(e) { console.warn("Error during beforeunload stopCamera:", e); }
-       }
+       if (typeof stopCamera === "function") { try { stopCamera(); } catch(e) {} }
   });
-
-  // console.log("Scanner script outer block finished initial execution.");
 
 </script>
 

@@ -3,7 +3,7 @@ from flask_wtf import FlaskForm
 from wtforms import (
     StringField, PasswordField, BooleanField, SubmitField,
     SelectField, FloatField, IntegerField, TextAreaField,
-    DateField, HiddenField
+    DateField, HiddenField, RadioField # <-- Import RadioField
 )
 from wtforms.validators import (
     DataRequired, Length, EqualTo, ValidationError,
@@ -173,6 +173,18 @@ class ReportSelectionForm(FlaskForm):
         coerce=int,
         validators=[DataRequired()]
     )
+    report_type = RadioField( # <-- New Field
+        'Report Type',
+        choices=[
+            ('pdf_summary', 'PDF Summary (Original)'),
+            ('buyer_excel', 'Buyer Summary (Excel)'),
+            ('buyer_csv', 'Buyer Summary (CSV)'),
+            ('item_excel', 'Item Summary (Excel)'),
+            ('item_csv', 'Item Summary (CSV)')
+        ],
+        default='pdf_summary', # Default to the original PDF
+        validators=[DataRequired()]
+    )
     submit = SubmitField('Generate Report')
 
     def __init__(self, *args, **kwargs):
@@ -181,6 +193,7 @@ class ReportSelectionForm(FlaskForm):
             (e.id, f"{e.event_name} ({e.gregorian_date.strftime('%Y-%m-%d')})")
             for e in Event.query.order_by(Event.gregorian_date.desc()).all()
         ]
+        # If no events, disable selection? Or handle in template. Choices handled here.
 
 
 class DeleteForm(FlaskForm):
